@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { isGoogleAuthConfigured } from "@/auth";
 import { LoginClient } from "@/components/login-client";
+import { LoginCardSkeleton } from "@/components/loading-skeletons";
 import { Alert } from "@/components/ui/alert";
 
 export default function LoginPage() {
@@ -17,11 +18,7 @@ export default function LoginPage() {
           `AUTH_GOOGLE_SECRET`、`AUTH_SECRET` 與 `ADMIN_EMAILS` 後重新啟動。
         </Alert>
       ) : null}
-      <Suspense
-        fallback={
-          <p className="text-sm text-[var(--muted-foreground)]">載入中…</p>
-        }
-      >
+      <Suspense fallback={<LoginCardSkeleton />}>
         <LoginClient googleEnabled={configured} />
       </Suspense>
     </div>

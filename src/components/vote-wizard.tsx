@@ -20,6 +20,7 @@ import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { CandidateVisual } from "@/components/candidate-visual";
 import { CopyVoteLinkButton } from "@/components/copy-vote-link-button";
+import { VoteCardSkeleton } from "@/components/loading-skeletons";
 import { voteChoiceSchema } from "@/lib/schemas/voting";
 import { buildVoteShareUrl } from "@/lib/election-share";
 import {
@@ -561,13 +562,7 @@ export function VoteWizard({
   }
 
   if (status === "loading" || linkBootstrapping) {
-    return (
-      <Card>
-        <CardContent className="py-10 text-center text-[var(--muted-foreground)]">
-          載入中…
-        </CardContent>
-      </Card>
-    );
+    return <VoteCardSkeleton />;
   }
 
   if (!session?.user && !isOpenMode) {

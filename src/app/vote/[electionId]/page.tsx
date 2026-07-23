@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { VoteWizard } from "@/components/vote-wizard";
+import { VoteCardSkeleton } from "@/components/loading-skeletons";
 
 type VoteByIdPageProps = {
   params: Promise<{ electionId: string }>;
@@ -18,11 +19,7 @@ export default async function VoteByIdPage({ params }: VoteByIdPageProps) {
           請登入後送出選票。每位有資格的帳號每場只能投一次。
         </p>
       </div>
-      <Suspense
-        fallback={
-          <p className="text-sm text-[var(--muted-foreground)]">載入中…</p>
-        }
-      >
+      <Suspense fallback={<VoteCardSkeleton />}>
         <VoteWizard initialElectionId={electionId} />
       </Suspense>
     </div>

@@ -1,16 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
+import { AuthControlsSkeleton } from "@/components/loading-skeletons";
 
 export function AuthControls() {
   const { data: session, status } = useSession();
 
   if (status === "loading") {
-    return (
-      <span className="text-xs text-[var(--muted-foreground)]">載入中…</span>
-    );
+    return <AuthControlsSkeleton />;
   }
 
   if (!session?.user) {

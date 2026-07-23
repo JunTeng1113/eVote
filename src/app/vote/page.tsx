@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { VoteWizard } from "@/components/vote-wizard";
+import { VoteCardSkeleton } from "@/components/loading-skeletons";
 
 export default function VotePage() {
   return (
@@ -12,11 +13,7 @@ export default function VotePage() {
           選擇一場投票後，挑選選項即可送出。每位有資格的帳號每場只能投一次。
         </p>
       </div>
-      <Suspense
-        fallback={
-          <p className="text-sm text-[var(--muted-foreground)]">載入中…</p>
-        }
-      >
+      <Suspense fallback={<VoteCardSkeleton />}>
         <VoteWizard />
       </Suspense>
     </div>

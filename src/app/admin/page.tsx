@@ -32,6 +32,7 @@ import {
 import { buildVoteShareUrl } from "@/lib/election-share";
 import { readResponseJson } from "@/lib/read-response-json";
 import { CopyVoteLinkButton } from "@/components/copy-vote-link-button";
+import { AdminPageSkeleton } from "@/components/loading-skeletons";
 
 const titleFormSchema = z
   .object({
@@ -861,7 +862,7 @@ export default function AdminPage() {
   }
 
   if (status === "loading") {
-    return <p className="text-sm text-[var(--muted-foreground)]">載入中…</p>;
+    return <AdminPageSkeleton />;
   }
 
   if (status !== "authenticated" || !session?.user) {
@@ -881,11 +882,12 @@ export default function AdminPage() {
   }
 
   if (!ready) {
-    return (
-      <p className="text-sm text-[var(--muted-foreground)]">
-        {error ?? "載入中…"}
-      </p>
-    );
+    if (error) {
+      return (
+        <p className="text-sm text-red-600">{error}</p>
+      );
+    }
+    return <AdminPageSkeleton />;
   }
 
   return (

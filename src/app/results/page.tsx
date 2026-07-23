@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CandidateVisual } from "@/components/candidate-visual";
 import { ResultsPieChart } from "@/components/results-pie-chart";
+import { ResultsPageSkeleton } from "@/components/loading-skeletons";
 import {
   exportResultsPdfA4,
   exportResultsPng,
@@ -225,9 +226,7 @@ function ResultsContent() {
   }
 
   if (loading) {
-    return (
-      <p className="text-sm text-[var(--muted-foreground)]">載入中…</p>
-    );
+    return <ResultsPageSkeleton />;
   }
 
   if (missing || !selected) {
@@ -443,11 +442,7 @@ function ResultsContent() {
 
 export default function ResultsPage() {
   return (
-    <Suspense
-      fallback={
-        <p className="text-sm text-[var(--muted-foreground)]">載入中…</p>
-      }
-    >
+    <Suspense fallback={<ResultsPageSkeleton />}>
       <ResultsContent />
     </Suspense>
   );
