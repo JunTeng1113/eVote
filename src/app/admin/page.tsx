@@ -1634,18 +1634,18 @@ export default function AdminPage() {
 
               {detailTab === "overview" ? (
                 <Card>
-                  <CardHeader>
-                    <CardTitle>{selected.title}</CardTitle>
-                    <CardDescription>
-                      狀態 <Badge>{phaseText(selected.phase)}</Badge> ·{" "}
-                      <Badge>{votingModeText(selected.votingMode)}</Badge> ·{" "}
-                      <Badge>{scheduleModeText(selected.scheduleMode)}</Badge> ·
-                      已收到 {selected.stats.ballotCount} 票
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
+                  <CardContent className="space-y-4 p-6">
                     <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(260px,20rem)]">
                       <div className="min-w-0 space-y-3">
+                        <CardTitle>{selected.title}</CardTitle>
+                        <CardDescription>
+                          狀態 <Badge>{phaseText(selected.phase)}</Badge> ·{" "}
+                          <Badge>{votingModeText(selected.votingMode)}</Badge> ·{" "}
+                          <Badge>
+                            {scheduleModeText(selected.scheduleMode)}
+                          </Badge>{" "}
+                          · 已收到 {selected.stats.ballotCount} 票
+                        </CardDescription>
                         <div className="whitespace-pre-wrap break-words text-sm leading-relaxed text-[var(--muted-foreground)]">
                           {selected.description.trim()
                             ? selected.description
@@ -1675,7 +1675,11 @@ export default function AdminPage() {
                               variant="outline"
                               className="w-full"
                             />
-                            <Button asChild variant="outline" className="w-full">
+                            <Button
+                              asChild
+                              variant="outline"
+                              className="w-full"
+                            >
                               <Link
                                 href={`/vote/${encodeURIComponent(selected.electionId)}`}
                                 target="_blank"
@@ -1691,7 +1695,11 @@ export default function AdminPage() {
                             >
                               全螢幕檢視
                             </Button>
-                            <Button asChild variant="outline" className="w-full">
+                            <Button
+                              asChild
+                              variant="outline"
+                              className="w-full"
+                            >
                               <Link
                                 href={`/results?id=${encodeURIComponent(selected.electionId)}`}
                               >
