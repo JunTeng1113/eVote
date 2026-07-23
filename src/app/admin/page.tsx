@@ -1676,18 +1676,6 @@ export default function AdminPage() {
                               className="w-full"
                             />
                             <Button
-                              asChild
-                              variant="outline"
-                              className="w-full"
-                            >
-                              <Link
-                                href={`/vote/${encodeURIComponent(selected.electionId)}`}
-                                target="_blank"
-                              >
-                                開啟投票頁
-                              </Link>
-                            </Button>
-                            <Button
                               type="button"
                               variant="secondary"
                               className="w-full"
@@ -1695,17 +1683,19 @@ export default function AdminPage() {
                             >
                               全螢幕檢視
                             </Button>
-                            <Button
-                              asChild
-                              variant="outline"
-                              className="w-full"
-                            >
-                              <Link
-                                href={`/results?id=${encodeURIComponent(selected.electionId)}`}
+                            {selected.phase === "tallied" ? (
+                              <Button
+                                asChild
+                                variant="outline"
+                                className="w-full"
                               >
-                                看結果
-                              </Link>
-                            </Button>
+                                <Link
+                                  href={`/results?id=${encodeURIComponent(selected.electionId)}`}
+                                >
+                                  查看結果
+                                </Link>
+                              </Button>
+                            ) : null}
                           </div>
                         </div>
 
@@ -1747,15 +1737,6 @@ export default function AdminPage() {
                                 ) : null}
                               </>
                             ) : null}
-                            {selected.phase === "tallied" ? (
-                              <Button asChild className="w-full">
-                                <Link
-                                  href={`/results?id=${encodeURIComponent(selected.electionId)}`}
-                                >
-                                  查看開票結果
-                                </Link>
-                              </Button>
-                            ) : null}
                             {selected.phase === "mixing" ? (
                               <p className="text-sm text-[var(--muted-foreground)]">
                                 開票進行中，請稍候…
@@ -1770,7 +1751,7 @@ export default function AdminPage() {
                                   ? "確認無誤後執行開票；若需繼續投票可先恢復。"
                                   : "投票時段已過，請執行開票公布結果。"
                                 : selected.phase === "tallied"
-                                  ? "此場已完成開票，可前往結果頁查看。"
+                                  ? "此場已完成開票，可查看結果。"
                                   : null}
                           </p>
                         </div>
