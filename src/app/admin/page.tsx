@@ -1653,78 +1653,109 @@ export default function AdminPage() {
                         投票時間：{selected.scheduleLabel}
                       </p>
                     ) : null}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <CopyVoteLinkButton
-                        electionId={selected.electionId}
-                        variant="outline"
-                      />
-                      <Button asChild size="default" variant="ghost">
-                        <Link
-                          href={`/vote/${encodeURIComponent(selected.electionId)}`}
-                          target="_blank"
-                        >
-                          開啟投票頁
-                        </Link>
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => setProjectionOpen(true)}
-                      >
-                        全螢幕檢視
-                      </Button>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <div className="text-xs font-medium text-[var(--muted-foreground)]">
+                          分享與檢視
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <CopyVoteLinkButton
+                            electionId={selected.electionId}
+                            variant="outline"
+                          />
+                          <Button asChild variant="outline">
+                            <Link
+                              href={`/vote/${encodeURIComponent(selected.electionId)}`}
+                              target="_blank"
+                            >
+                              開啟投票頁
+                            </Link>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => setProjectionOpen(true)}
+                          >
+                            全螢幕檢視
+                          </Button>
+                          <Button asChild variant="outline">
+                            <Link
+                              href={`/results?id=${encodeURIComponent(selected.electionId)}`}
+                            >
+                              看結果
+                            </Link>
+                          </Button>
+                        </div>
+                      </div>
+
+                      {selected.votingMode === "open" ? (
+                        <Alert>
+                          此場為無須登入投票，請透過上方連結分享給參與者。一般投票列表不會顯示此場。
+                        </Alert>
+                      ) : null}
+
+                      <div className="space-y-2">
+                        <div className="text-xs font-medium text-[var(--muted-foreground)]">
+                          投票流程
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {selected.phase === "voting" ? (
+                            <Button
+                              disabled={busy}
+                              onClick={() => void runAction("close")}
+                            >
+                              截止投票
+                            </Button>
+                          ) : null}
+                          {selected.phase === "closed" ? (
+                            <>
+                              <Button
+                                disabled={busy}
+                                variant="secondary"
+                                onClick={() => void runAction("tally")}
+                              >
+                                執行開票
+                              </Button>
+                              {selectedCanReopen ? (
+                                <Button
+                                  disabled={busy}
+                                  variant="outline"
+                                  onClick={() => void runAction("reopen")}
+                                >
+                                  恢復投票
+                                </Button>
+                              ) : null}
+                            </>
+                          ) : null}
+                          {selected.phase === "tallied" ? (
+                            <Button asChild>
+                              <Link
+                                href={`/results?id=${encodeURIComponent(selected.electionId)}`}
+                              >
+                                查看開票結果
+                              </Link>
+                            </Button>
+                          ) : null}
+                          {selected.phase === "mixing" ? (
+                            <p className="text-sm text-[var(--muted-foreground)]">
+                              開票進行中，請稍候…
+                            </p>
+                          ) : null}
+                        </div>
+                        <p className="text-xs text-[var(--muted-foreground)]">
+                          {selected.phase === "voting"
+                            ? "現場或線上投票結束後，請先截止再執行開票。"
+                            : selected.phase === "closed"
+                              ? selectedCanReopen
+                                ? "確認無誤後執行開票；若需繼續投票可先恢復。"
+                                : "投票時段已過，請執行開票公布結果。"
+                              : selected.phase === "tallied"
+                                ? "此場已完成開票，可前往結果頁查看。"
+                                : null}
+                        </p>
+                      </div>
                     </div>
-                    {selected.votingMode === "open" ? (
-                      <Alert>
-                        此場為無須登入投票，請透過上方連結分享給參與者。一般投票列表不會顯示此場。
-                      </Alert>
-                    ) : null}
-                    <Separator />
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        disabled={busy || selected.phase !== "voting"}
-                        onClick={() => void runAction("close")}
-                      >
-                        截止投票
-                      </Button>
-                      <Button
-                        disabled={
-                          busy ||
-                          selected.phase !== "closed" ||
-                          !selectedCanReopen
-                        }
-                        variant="outline"
-                        onClick={() => void runAction("reopen")}
-                      >
-                        恢復投票
-                      </Button>
-                      <Button
-                        disabled={busy || selected.phase !== "closed"}
-                        variant="secondary"
-                        onClick={() => void runAction("tally")}
-                      >
-                        執行開票
-                      </Button>
-                      <Button
-                        disabled={busy}
-                        variant="outline"
-                        onClick={() => void onReset()}
-                      >
-                        重設此投票
-                      </Button>
-                      <Button
-                        disabled={busy}
-                        variant="destructive"
-                        onClick={() => void onDelete()}
-                      >
-                        刪除
-                      </Button>
-                      <Button asChild variant="ghost">
-                        <Link href={`/results?id=${selected.electionId}`}>
-                          看結果
-                        </Link>
-                      </Button>
-                    </div>
+
                     <Separator />
                     <div className="space-y-3">
                       <div className="text-sm font-medium">投票選項</div>
@@ -1754,6 +1785,34 @@ export default function AdminPage() {
                           ) : null}
                         </div>
                       ))}
+                    </div>
+
+                    <Separator />
+                    <div className="space-y-2">
+                      <div className="text-xs font-medium text-[var(--muted-foreground)]">
+                        危險操作
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          disabled={busy}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void onReset()}
+                        >
+                          重設此投票
+                        </Button>
+                        <Button
+                          disabled={busy}
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => void onDelete()}
+                        >
+                          刪除
+                        </Button>
+                      </div>
+                      <p className="text-xs text-[var(--muted-foreground)]">
+                        重設會清除選票與結果並回到投票中；刪除後無法復原。
+                      </p>
                     </div>
                   </CardContent>
                 </Card>
