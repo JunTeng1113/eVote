@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { signIn, signOut, useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, startTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -21,21 +21,14 @@ import { Badge } from "@/components/ui/badge";
 import { CandidateVisual } from "@/components/candidate-visual";
 import { CopyVoteLinkButton } from "@/components/copy-vote-link-button";
 import { VoteCardSkeleton } from "@/components/loading-skeletons";
+import {
+  ListPagination,
+  LIST_PAGE_SIZE,
+  slicePage,
+} from "@/components/list-pagination";
+import { Skeleton } from "@/components/ui/skeleton";
 import { voteChoiceSchema } from "@/lib/schemas/voting";
 import { buildVoteShareUrl } from "@/lib/election-share";
-import {
-  blindMessage,
-  messageFromCredentialSeed,
-  randomBlindingFactor,
-  randomCredentialSeed,
-  unblindSignature,
-  verifyBlindSignature,
-} from "@/lib/crypto/blind-signature";
-import { encryptBallot } from "@/lib/crypto/elgamal";
-import {
-  createCredentialProof,
-  proveBallotValidity,
-} from "@/lib/crypto/zk-proof";
 
 type ElectionPublic = {
   electionId: string;
@@ -162,8 +155,11 @@ export function VoteWizard({
   const presetId = initialElectionId || searchParams.get("id");
 
   const [options, setOptions] = useState<ElectionOption[]>([]);
+  const [listPage, setListPage] = useState(1);
+  const [listLoading, setListLoading] = useState(false);
   const [election, setElection] = useState<ElectionPublic | null>(null);
   const [me, setMe] = useState<MeStatus | null>(null);
+  const [meLoading, setMeLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
@@ -171,7 +167,7 @@ export function VoteWizard({
   const [done, setDone] = useState(false);
   /** 無專屬連結時先顯示列表；選定後只顯示該場投票 */
   const [showList, setShowList] = useState(!presetId);
-  /** 專屬連結載入中（含無須登入場次） */
+  /** 專屬連結：先載投票資訊，資格狀態可稍後補齊 */
   const [linkBootstrapping, setLinkBootstrapping] = useState(Boolean(presetId));
 
   const choiceForm = useForm<ChoiceForm>({
@@ -180,6 +176,7 @@ export function VoteWizard({
   });
 
   const isOpenMode = election?.votingMode === "open";
+  const pagedOptions = slicePage(options, listPage, LIST_PAGE_SIZE);
 
   useEffect(() => {
     if (!presetId) {
@@ -209,18 +206,26 @@ export function VoteWizard({
     }
     let alive = true;
     void (async () => {
+      setListLoading(true);
       const res = await fetch("/api/eligibility");
       const data = (await res.json()) as {
         ok?: boolean;
         elections?: ElectionOption[];
       };
-      if (!alive || !data.elections) {
+      if (!alive) {
+        return;
+      }
+      setListLoading(false);
+      if (!data.elections) {
         return;
       }
       // 一般列表只顯示自己有投票資格的場次（不含無須登入場次）
       const eligibleOptions = data.elections.filter((e) => e.eligible);
-      setOptions(eligibleOptions);
-      setShowList(true);
+      startTransition(() => {
+        setOptions(eligibleOptions);
+        setListPage(1);
+        setShowList(true);
+      });
     })();
     return () => {
       alive = false;
@@ -276,6 +281,7 @@ export function VoteWizard({
     setReceiptHash(null);
     setProgress(null);
     choiceForm.reset({ candidateId: "" });
+    setMeLoading(true);
 
     const electionRes = await fetch(
       `/api/election?id=${encodeURIComponent(electionId)}`,
@@ -291,10 +297,14 @@ export function VoteWizard({
       setError(electionData.error ?? "找不到此投票");
       setElection(null);
       setMe(null);
+      setMeLoading(false);
+      setLinkBootstrapping(false);
       return;
     }
+    // 先顯示投票資訊，資格狀態稍後補齊
     setElection(electionData);
     setShowList(false);
+    setLinkBootstrapping(false);
 
     if (electionData.votingMode === "open") {
       const guestRes = await fetch(
@@ -307,6 +317,7 @@ export function VoteWizard({
       if (!alive) {
         return;
       }
+      setMeLoading(false);
       if (!guestRes.ok || guestData.ok === false) {
         setMe({
           eligible: false,
@@ -327,6 +338,7 @@ export function VoteWizard({
 
     if (status !== "authenticated") {
       setMe(null);
+      setMeLoading(false);
       return;
     }
 
@@ -338,6 +350,7 @@ export function VoteWizard({
       return;
     }
     setMe(meData);
+    setMeLoading(false);
   }
 
   async function onSubmitBallot(values: ChoiceForm) {
@@ -446,6 +459,23 @@ export function VoteWizard({
     }
 
     setProgress("正在準備你的選票…");
+    const [
+      {
+        blindMessage,
+        messageFromCredentialSeed,
+        randomBlindingFactor,
+        randomCredentialSeed,
+        unblindSignature,
+        verifyBlindSignature,
+      },
+      { encryptBallot },
+      { createCredentialProof, proveBallotValidity },
+    ] = await Promise.all([
+      import("@/lib/crypto/blind-signature"),
+      import("@/lib/crypto/elgamal"),
+      import("@/lib/crypto/zk-proof"),
+    ]);
+
     const seed = randomCredentialSeed();
     const messageHex = messageFromCredentialSeed(election.electionId, seed);
     const blinding = randomBlindingFactor(election.crypto.issuerN);
@@ -561,7 +591,7 @@ export function VoteWizard({
     );
   }
 
-  if (status === "loading" || linkBootstrapping) {
+  if (status === "loading" || (linkBootstrapping && !election)) {
     return <VoteCardSkeleton />;
   }
 
@@ -572,7 +602,9 @@ export function VoteWizard({
           <CardTitle>請先登入</CardTitle>
           <CardDescription>
             {presetId
-              ? "你正透過專屬投票連結進入。請使用有投票資格的 Google 帳號登入。"
+              ? election
+                ? `「${election.title}」需登入後投票。請使用有投票資格的 Google 帳號登入。`
+                : "你正透過專屬投票連結進入。請使用有投票資格的 Google 帳號登入。"
               : "使用 Google 帳號登入後即可投票。只有主辦單位允許的帳號可以投票。"}
           </CardDescription>
         </CardHeader>
@@ -638,12 +670,19 @@ export function VoteWizard({
             <CardTitle>選擇投票</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {options.length === 0 ? (
+            {listLoading ? (
+              <div className="space-y-2" aria-busy="true" aria-label="載入中">
+                <Skeleton className="h-16 w-full rounded-lg" />
+                <Skeleton className="h-16 w-full rounded-lg" />
+                <Skeleton className="h-16 w-full rounded-lg" />
+              </div>
+            ) : options.length === 0 ? (
               <p className="text-sm text-[var(--muted-foreground)]">
                 目前沒有你可以參與的投票。
               </p>
             ) : (
-              options.map((item) => {
+              <>
+                {pagedOptions.map((item) => {
                 const closed = isVotingClosed({
                   windowStatus: item.windowStatus,
                   phase: item.phase,
@@ -691,7 +730,13 @@ export function VoteWizard({
                     </div>
                   </div>
                 );
-              })
+              })}
+                <ListPagination
+                  page={listPage}
+                  totalItems={options.length}
+                  onPageChange={setListPage}
+                />
+              </>
             )}
           </CardContent>
         </Card>
@@ -699,6 +744,20 @@ export function VoteWizard({
 
       {error ? (
         <Alert className="border-red-300/50 bg-red-50 text-red-900">{error}</Alert>
+      ) : null}
+
+      {!showList && election && !me && meLoading ? (
+        <Card>
+          <CardHeader className="space-y-3">
+            <Skeleton className="h-6 w-56" />
+            <Skeleton className="h-4 w-72 max-w-full" />
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Skeleton className="h-14 w-full rounded-lg" />
+            <Skeleton className="h-14 w-full rounded-lg" />
+            <Skeleton className="h-11 w-36 rounded-md" />
+          </CardContent>
+        </Card>
       ) : null}
 
       {!showList && election && me ? (

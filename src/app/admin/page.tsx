@@ -33,6 +33,12 @@ import { buildVoteShareUrl } from "@/lib/election-share";
 import { readResponseJson } from "@/lib/read-response-json";
 import { CopyVoteLinkButton } from "@/components/copy-vote-link-button";
 import { AdminPageSkeleton } from "@/components/loading-skeletons";
+import {
+  ListPagination,
+  LIST_PAGE_SIZE,
+  slicePage,
+} from "@/components/list-pagination";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const titleFormSchema = z
   .object({
@@ -131,7 +137,8 @@ type ElectionSummary = {
   createdByEmail?: string | null;
   managerEmails?: string[];
   myRole?: "system" | "creator" | "manager";
-  candidates: Array<{
+  candidateCount?: number;
+  candidates?: Array<{
     id: string;
     name: string;
     party: string;
@@ -289,6 +296,11 @@ export default function AdminPage() {
 
   const [elections, setElections] = useState<ElectionSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedDetail, setSelectedDetail] = useState<ElectionSummary | null>(
+    null,
+  );
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [listPage, setListPage] = useState(1);
   const [voters, setVoters] = useState<VoterRow[]>([]);
   const [managers, setManagers] = useState<ManagerRow[]>([]);
   const [managerEmailsDraft, setManagerEmailsDraft] = useState("");
@@ -330,7 +342,18 @@ export default function AdminPage() {
     defaultValues: { emails: "" },
   });
 
-  const selected = elections.find((e) => e.electionId === selectedId) ?? null;
+  const listItem =
+    elections.find((e) => e.electionId === selectedId) ?? null;
+  const selected =
+    selectedId && selectedDetail?.electionId === selectedId
+      ? {
+          ...(listItem ?? {}),
+          ...selectedDetail,
+          myRole: listItem?.myRole ?? selectedDetail.myRole,
+          candidates: selectedDetail.candidates ?? [],
+        }
+      : null;
+  const pagedElections = slicePage(elections, listPage, LIST_PAGE_SIZE);
   const selectedCanReopen =
     selected &&
     canReopenVoting({
@@ -339,6 +362,31 @@ export default function AdminPage() {
       votingStartsAt: selected.votingStartsAt,
       votingEndsAt: selected.votingEndsAt,
     });
+
+  async function loadElectionDetail(electionId: string) {
+    setDetailLoading(true);
+    const res = await fetch(
+      `/api/election?id=${encodeURIComponent(electionId)}`,
+    );
+    const data = await readResponseJson<
+      ElectionSummary & { error?: string; ok?: boolean }
+    >(res);
+    setDetailLoading(false);
+    if (!res.ok || !data?.electionId) {
+      toast.error(data?.error ?? "無法載入投票詳情");
+      setSelectedDetail(null);
+      return;
+    }
+    setSelectedDetail({
+      ...data,
+      candidates: data.candidates ?? [],
+      stats: data.stats ?? {
+        eligibleVoters: 0,
+        authorizedCount: 0,
+        ballotCount: 0,
+      },
+    });
+  }
 
   async function loadElections(preferId?: string | null) {
     const res = await fetch("/api/admin/elections");
@@ -357,18 +405,22 @@ export default function AdminPage() {
     setIsSystemAdmin(Boolean(data.isSystemAdmin));
     const list = data.elections ?? [];
     setElections(list);
+    setListPage(1);
     if (preferId && list.some((e) => e.electionId === preferId)) {
       setSelectedId(preferId);
+      await loadElectionDetail(preferId);
       await loadVoters(preferId);
       await loadManagers(preferId);
       return;
     }
     if (selectedId && list.some((e) => e.electionId === selectedId)) {
+      await loadElectionDetail(selectedId);
       await loadVoters(selectedId);
       await loadManagers(selectedId);
       return;
     }
     setSelectedId(null);
+    setSelectedDetail(null);
     setVoters([]);
     setManagers([]);
   }
@@ -605,6 +657,8 @@ export default function AdminPage() {
     setSelectedId(electionId);
     setDetailTab("overview");
     setAudit(null);
+    setSelectedDetail(null);
+    await loadElectionDetail(electionId);
     await loadVoters(electionId);
     await loadManagers(electionId);
   }
@@ -1429,7 +1483,7 @@ export default function AdminPage() {
 
       {section === "list" ? (
         <div className="space-y-4">
-          {!selected ? (
+          {!selectedId ? (
             <Card>
               <CardHeader>
                 <CardTitle>投票列表</CardTitle>
@@ -1445,39 +1499,61 @@ export default function AdminPage() {
                     尚無投票。請先到「建立新投票」。
                   </p>
                 ) : (
-                  elections.map((election) => (
-                    <button
-                      key={election.electionId}
-                      type="button"
-                      onClick={() => void onSelect(election.electionId)}
-                      className="w-full rounded-lg border border-[var(--border)] px-3 py-3 text-left transition hover:bg-[var(--muted)]"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-medium">{election.title}</span>
-                        <div className="flex gap-2">
-                          {election.myRole === "creator" ? (
-                            <Badge>建立者</Badge>
-                          ) : null}
-                          {election.myRole === "manager" ? (
-                            <Badge>共同管理者</Badge>
-                          ) : null}
-                          {election.myRole === "system" ? (
-                            <Badge>系統</Badge>
-                          ) : null}
-                          <Badge>{votingModeText(election.votingMode)}</Badge>
-                          <Badge>{phaseText(election.phase)}</Badge>
+                  <>
+                    {pagedElections.map((election) => (
+                      <button
+                        key={election.electionId}
+                        type="button"
+                        onClick={() => void onSelect(election.electionId)}
+                        className="w-full rounded-lg border border-[var(--border)] px-3 py-3 text-left transition hover:bg-[var(--muted)]"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-medium">{election.title}</span>
+                          <div className="flex gap-2">
+                            {election.myRole === "creator" ? (
+                              <Badge>建立者</Badge>
+                            ) : null}
+                            {election.myRole === "manager" ? (
+                              <Badge>共同管理者</Badge>
+                            ) : null}
+                            {election.myRole === "system" ? (
+                              <Badge>系統</Badge>
+                            ) : null}
+                            <Badge>{votingModeText(election.votingMode)}</Badge>
+                            <Badge>{phaseText(election.phase)}</Badge>
+                          </div>
                         </div>
-                      </div>
-                      <div className="mt-1 text-xs text-[var(--muted-foreground)]">
-                        {election.candidates.length} 個選項 ·{" "}
-                        {election.votingMode === "open"
-                          ? "公開連結投票"
-                          : `投票權人數 ${election.stats.eligibleVoters} 人`}{" "}
-                        · 已投票人數 {election.stats.ballotCount} 人
-                      </div>
-                    </button>
-                  ))
+                        <div className="mt-1 text-xs text-[var(--muted-foreground)]">
+                          {election.candidateCount ??
+                            election.candidates?.length ??
+                            0}{" "}
+                          個選項 ·{" "}
+                          {election.votingMode === "open"
+                            ? "公開連結投票"
+                            : `投票權人數 ${election.stats.eligibleVoters} 人`}{" "}
+                          · 已投票人數 {election.stats.ballotCount} 人
+                        </div>
+                      </button>
+                    ))}
+                    <ListPagination
+                      page={listPage}
+                      totalItems={elections.length}
+                      onPageChange={setListPage}
+                    />
+                  </>
                 )}
+              </CardContent>
+            </Card>
+          ) : detailLoading || !selected ? (
+            <Card>
+              <CardHeader className="space-y-3">
+                <Skeleton className="h-6 w-48" />
+                <Skeleton className="h-4 w-64 max-w-full" />
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Skeleton className="h-24 w-full rounded-lg" />
+                <Skeleton className="h-16 w-full rounded-lg" />
+                <Skeleton className="h-16 w-full rounded-lg" />
               </CardContent>
             </Card>
           ) : (
@@ -1487,6 +1563,7 @@ export default function AdminPage() {
                   variant="outline"
                   onClick={() => {
                     setSelectedId(null);
+                    setSelectedDetail(null);
                     setVoters([]);
                     setAudit(null);
                   }}
@@ -1578,7 +1655,7 @@ export default function AdminPage() {
                     <Separator />
                     <div className="space-y-3">
                       <div className="text-sm font-medium">投票選項</div>
-                      {selected.candidates.map((c) => (
+                      {(selected.candidates ?? []).map((c) => (
                         <div
                           key={c.id}
                           className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] p-3"

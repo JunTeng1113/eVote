@@ -7,13 +7,18 @@ import {
   createElection,
   deleteElection,
   electionSummary,
-  listManagedElections,
+  listManagedElectionSummaries,
   publicElectionView,
   resetElection,
   updateCandidateImage,
   updateElectionMeta,
 } from "@/lib/store/election-store";
 import { buildPublicElectionView } from "@/lib/election-view";
+import {
+  formatElectionScheduleLabel,
+  getVotingWindowStatus,
+  electionScheduleFrom,
+} from "@/lib/voting-schedule";
 import {
   createElectionSchema,
   electionIdSchema,
@@ -37,22 +42,45 @@ export async function GET() {
     return NextResponse.json(user, { status: 401 });
   }
   try {
-    const elections = await listManagedElections(
+    const elections = await listManagedElectionSummaries(
       user.email,
       user.isSystemAdmin,
     );
     return NextResponse.json({
       ok: true,
       isSystemAdmin: user.isSystemAdmin,
-      elections: elections.map((e) => ({
-        ...electionSummary(e),
-        ...buildPublicElectionView(e),
-        myRole: user.isSystemAdmin
-          ? "system"
-          : e.createdByEmail === user.email
-            ? "creator"
-            : "manager",
-      })),
+      elections: elections.map((e) => {
+        const schedule = electionScheduleFrom(e);
+        return {
+          electionId: e.electionId,
+          title: e.title,
+          description: e.description,
+          phase: e.phase,
+          votingMode: e.votingMode,
+          scheduleMode: e.scheduleMode,
+          votingStartsAt: e.votingStartsAt,
+          votingEndsAt: e.votingEndsAt,
+          createdByEmail: e.createdByEmail,
+          managerEmails: e.managerEmails,
+          candidateCount: e.candidateCount,
+          scheduleLabel: formatElectionScheduleLabel({
+            scheduleMode: e.scheduleMode,
+            votingStartsAt: e.votingStartsAt,
+            votingEndsAt: e.votingEndsAt,
+          }),
+          windowStatus: getVotingWindowStatus(schedule),
+          stats: {
+            eligibleVoters: e.eligibleVoters,
+            authorizedCount: 0,
+            ballotCount: e.ballotCount,
+          },
+          myRole: user.isSystemAdmin
+            ? "system"
+            : e.createdByEmail === user.email
+              ? "creator"
+              : "manager",
+        };
+      }),
     });
   } catch (error) {
     const message =

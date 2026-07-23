@@ -309,6 +309,95 @@ export async function listManagedElections(
   return rows.map(mapElection);
 }
 
+/** 管理列表用：只取摘要欄位與計數，避免一次載入選票／圖片。 */
+export type ManagedElectionListItem = {
+  electionId: string;
+  title: string;
+  description: string;
+  phase: ElectionPhase;
+  votingMode: VotingMode;
+  scheduleMode: ScheduleMode;
+  votingStartsAt: string | null;
+  votingEndsAt: string | null;
+  createdByEmail: string | null;
+  managerEmails: string[];
+  candidateCount: number;
+  eligibleVoters: number;
+  ballotCount: number;
+  createdAt: string;
+  hasResult: boolean;
+};
+
+export async function listManagedElectionSummaries(
+  email: string,
+  isSystemAdmin: boolean,
+): Promise<ManagedElectionListItem[]> {
+  const normalized = normalizeEmail(email);
+  const rows = await prisma.election.findMany({
+    where: isSystemAdmin
+      ? undefined
+      : {
+          OR: [
+            { createdByEmail: normalized },
+            { managers: { some: { email: normalized } } },
+          ],
+        },
+    select: {
+      electionId: true,
+      title: true,
+      description: true,
+      phase: true,
+      votingMode: true,
+      scheduleMode: true,
+      votingStartsAt: true,
+      votingEndsAt: true,
+      createdByEmail: true,
+      createdAt: true,
+      tally: true,
+      managers: { select: { email: true } },
+      _count: {
+        select: {
+          candidates: true,
+          voters: true,
+          ballots: true,
+          namedBallots: true,
+          guestBallots: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return rows.map((row) => {
+    const votingMode = (row.votingMode as VotingMode) ?? "anonymous";
+    const ballotCount =
+      votingMode === "named"
+        ? row._count.namedBallots
+        : votingMode === "open"
+          ? row._count.guestBallots
+          : row._count.ballots;
+    return {
+      electionId: row.electionId,
+      title: row.title,
+      description: row.description,
+      phase: row.phase as ElectionPhase,
+      votingMode,
+      scheduleMode: (row.scheduleMode as ScheduleMode) ?? "unlimited",
+      votingStartsAt: row.votingStartsAt
+        ? row.votingStartsAt.toISOString()
+        : null,
+      votingEndsAt: row.votingEndsAt ? row.votingEndsAt.toISOString() : null,
+      createdByEmail: row.createdByEmail,
+      managerEmails: row.managers.map((m) => m.email),
+      candidateCount: row._count.candidates,
+      eligibleVoters: votingMode === "open" ? 0 : row._count.voters,
+      ballotCount,
+      createdAt: row.createdAt.toISOString(),
+      hasResult: row.tally !== null,
+    };
+  });
+}
+
 export function canManageElection(
   election: Pick<ElectionState, "createdByEmail" | "managerEmails">,
   email: string,
