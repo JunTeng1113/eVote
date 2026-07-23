@@ -26,12 +26,17 @@ export function DialogOverlay({
 
 export function DialogContent({
   className,
+  overlayClassName,
+  container,
   children,
   ...props
-}: ComponentProps<typeof DialogPrimitive.Content>) {
+}: ComponentProps<typeof DialogPrimitive.Content> & {
+  container?: HTMLElement | null;
+  overlayClassName?: string;
+}) {
   return (
-    <DialogPortal>
-      <DialogOverlay />
+    <DialogPortal container={container ?? undefined}>
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         className={cn(
           "fixed top-1/2 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[var(--border)] bg-[var(--background)] p-5 shadow-lg",

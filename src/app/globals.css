@@ -41,3 +41,42 @@ body {
     text-decoration: none;
   }
 }
+
+@keyframes evote-wave-drift {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes evote-wave-rise {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.evote-voting-wave-track {
+  animation: evote-wave-drift 8s linear infinite;
+}
+
+.evote-voting-wave-track-slow {
+  animation: evote-wave-drift 12s linear infinite;
+}
+
+.evote-voting-wave-bob {
+  animation: evote-wave-rise 3.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .evote-voting-wave-track,
+  .evote-voting-wave-track-slow,
+  .evote-voting-wave-bob {
+    animation: none;
+  }
+}

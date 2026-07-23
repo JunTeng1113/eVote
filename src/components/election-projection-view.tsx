@@ -96,6 +96,91 @@ function useNow(active: boolean): number {
   return now;
 }
 
+function useReveal(resetKey: string, delayMs = 80) {
+  const [stage, setStage] = useState(0);
+  useEffect(() => {
+    setStage(0);
+    const timers = [
+      window.setTimeout(() => setStage(1), delayMs),
+      window.setTimeout(() => setStage(2), delayMs + 320),
+      window.setTimeout(() => setStage(3), delayMs + 640),
+      window.setTimeout(() => setStage(4), delayMs + 960),
+    ];
+    return () => {
+      timers.forEach((id) => window.clearTimeout(id));
+    };
+  }, [delayMs, resetKey]);
+  return stage;
+}
+
+function VotingWaveBackdrop() {
+  return (
+    <div
+      className="evote-voting-wave-bob pointer-events-none absolute inset-x-[-20%] top-1/2 h-28 -translate-y-1/2 overflow-hidden opacity-70 sm:h-36"
+      aria-hidden
+    >
+      <div className="evote-voting-wave-track absolute inset-y-0 left-0 flex w-[200%]">
+        <svg
+          className="h-full w-1/2"
+          viewBox="0 0 600 120"
+          preserveAspectRatio="none"
+        >
+          <path
+            d="M0 70 C 75 30, 150 110, 225 70 S 375 30, 450 70 S 575 110, 600 70 V 120 H 0 Z"
+            fill="rgba(11, 79, 108, 0.14)"
+          />
+          <path
+            d="M0 78 C 80 48, 160 98, 240 78 S 400 48, 480 78 S 560 98, 600 78 V 120 H 0 Z"
+            fill="rgba(27, 122, 110, 0.16)"
+          />
+        </svg>
+        <svg
+          className="h-full w-1/2"
+          viewBox="0 0 600 120"
+          preserveAspectRatio="none"
+        >
+          <path
+            d="M0 70 C 75 30, 150 110, 225 70 S 375 30, 450 70 S 575 110, 600 70 V 120 H 0 Z"
+            fill="rgba(11, 79, 108, 0.14)"
+          />
+          <path
+            d="M0 78 C 80 48, 160 98, 240 78 S 400 48, 480 78 S 560 98, 600 78 V 120 H 0 Z"
+            fill="rgba(27, 122, 110, 0.16)"
+          />
+        </svg>
+      </div>
+      <div className="evote-voting-wave-track-slow absolute inset-y-2 left-0 flex w-[200%] opacity-80">
+        <svg
+          className="h-full w-1/2"
+          viewBox="0 0 600 120"
+          preserveAspectRatio="none"
+        >
+          <path
+            d="M0 62 C 70 92, 140 32, 210 62 S 350 92, 420 62 S 530 32, 600 62"
+            fill="none"
+            stroke="rgba(11, 79, 108, 0.35)"
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
+        </svg>
+        <svg
+          className="h-full w-1/2"
+          viewBox="0 0 600 120"
+          preserveAspectRatio="none"
+        >
+          <path
+            d="M0 62 C 70 92, 140 32, 210 62 S 350 92, 420 62 S 530 32, 600 62"
+            fill="none"
+            stroke="rgba(11, 79, 108, 0.35)"
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 export function ElectionProjectionView({
   election,
   busy,
@@ -128,6 +213,11 @@ export function ElectionProjectionView({
   const accent = phaseAccent(election.phase);
   const options = election.candidates;
   const [voteUrl, setVoteUrl] = useState("");
+  const showQr =
+    Boolean(voteUrl) &&
+    election.phase !== "tallied" &&
+    election.phase !== "closed";
+  const stage = useReveal(`${election.electionId}:${election.phase}`);
 
   useEffect(() => {
     setVoteUrl(
@@ -183,7 +273,13 @@ export function ElectionProjectionView({
           </Button>
         </div>
 
-        <header className="mt-6 space-y-3 text-center">
+        <header
+          className="mt-6 space-y-3 text-center transition-all duration-700 ease-out"
+          style={{
+            opacity: stage >= 1 ? 1 : 0,
+            transform: stage >= 1 ? "translateY(0)" : "translateY(12px)",
+          }}
+        >
           <h1 className="font-[family-name:var(--font-display)] text-3xl font-semibold leading-tight text-[#0f1c24] sm:text-4xl">
             {election.title}
           </h1>
@@ -200,19 +296,26 @@ export function ElectionProjectionView({
         </header>
 
         <div className="my-8 flex flex-1 flex-col items-center justify-center gap-8 text-center sm:my-10 lg:flex-row lg:items-center lg:gap-12 lg:text-left">
-          <div className="flex flex-col items-center gap-4 lg:items-start">
-            <p className="text-sm font-medium tracking-[0.2em] text-[#4d6470] sm:text-base">
+          <div
+            className="relative flex flex-col items-center gap-4 transition-all duration-700 ease-out lg:items-start"
+            style={{
+              opacity: stage >= 2 ? 1 : 0,
+              transform: stage >= 2 ? "translateY(0) scale(1)" : "translateY(16px) scale(0.94)",
+            }}
+          >
+            {election.phase === "voting" ? <VotingWaveBackdrop /> : null}
+            <p className="relative z-[1] text-sm font-medium tracking-[0.2em] text-[#4d6470] sm:text-base">
               目前階段
             </p>
             <p
-              className="font-[family-name:var(--font-display)] text-6xl font-semibold tracking-tight sm:text-7xl md:text-8xl"
+              className="relative z-[1] font-[family-name:var(--font-display)] text-6xl font-semibold tracking-tight sm:text-7xl md:text-8xl"
               style={{ color: accent }}
               aria-live="polite"
             >
               {phase}
             </p>
             {showCountdown ? (
-              <div className="mt-2 space-y-2 text-center lg:text-left">
+              <div className="relative z-[1] mt-2 space-y-2 text-center lg:text-left">
                 <p className="text-base text-[#4d6470] sm:text-lg">
                   {election.phase === "voting"
                     ? countdown.expired
@@ -227,8 +330,14 @@ export function ElectionProjectionView({
             ) : null}
           </div>
 
-          {voteUrl && election.phase !== "tallied" ? (
-            <div className="flex flex-col items-center gap-3 rounded-2xl border border-[rgba(15,28,36,0.12)] bg-white/90 px-6 py-5">
+          {showQr ? (
+            <div
+              className="flex flex-col items-center gap-3 rounded-2xl border border-[rgba(15,28,36,0.12)] bg-white/90 px-6 py-5 transition-all duration-700 ease-out"
+              style={{
+                opacity: stage >= 2 ? 1 : 0,
+                transform: stage >= 2 ? "translateY(0) scale(1)" : "translateY(20px) scale(0.92)",
+              }}
+            >
               <QRCodeSVG
                 value={voteUrl}
                 size={200}
@@ -246,7 +355,10 @@ export function ElectionProjectionView({
         </div>
 
         <section>
-          <h2 className="mb-4 text-center text-sm font-medium uppercase tracking-wide text-[#4d6470]">
+          <h2
+            className="mb-4 text-center text-sm font-medium uppercase tracking-wide text-[#4d6470] transition-opacity duration-700"
+            style={{ opacity: stage >= 3 ? 1 : 0 }}
+          >
             投票選項（{options.length}）
           </h2>
           <ul
@@ -260,38 +372,53 @@ export function ElectionProjectionView({
                     : "repeat(auto-fill, minmax(280px, 1fr))",
             }}
           >
-            {options.map((option, index) => (
-              <li
-                key={option.id}
-                className="flex items-center gap-3 rounded-xl border border-[rgba(15,28,36,0.12)] bg-white/80 px-4 py-3"
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[rgba(11,79,108,0.08)] text-sm font-semibold tabular-nums text-[#0b4f6c]">
-                  {index + 1}
-                </span>
-                {option.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={option.imageUrl}
-                    alt=""
-                    className="h-12 w-12 shrink-0 rounded-lg object-cover"
-                  />
-                ) : null}
-                <div className="min-w-0">
-                  <div className="truncate text-lg font-medium">
-                    {option.name}
-                  </div>
-                  {option.party.trim() ? (
-                    <div className="truncate text-sm text-[#4d6470]">
-                      {option.party}
-                    </div>
+            {options.map((option, index) => {
+              const rowDelay = Math.min(index, 20) * 55;
+              const showRow = stage >= 3;
+              return (
+                <li
+                  key={option.id}
+                  className="flex items-center gap-3 rounded-xl border border-[rgba(15,28,36,0.12)] bg-white/80 px-4 py-3"
+                  style={{
+                    opacity: showRow ? 1 : 0,
+                    transform: showRow ? "translateY(0)" : "translateY(14px)",
+                    transition: `opacity 0.5s ease-out ${rowDelay}ms, transform 0.5s ease-out ${rowDelay}ms`,
+                  }}
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[rgba(11,79,108,0.08)] text-sm font-semibold tabular-nums text-[#0b4f6c]">
+                    {index + 1}
+                  </span>
+                  {option.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={option.imageUrl}
+                      alt=""
+                      className="h-12 w-12 shrink-0 rounded-lg object-cover"
+                    />
                   ) : null}
-                </div>
-              </li>
-            ))}
+                  <div className="min-w-0">
+                    <div className="truncate text-lg font-medium">
+                      {option.name}
+                    </div>
+                    {option.party.trim() ? (
+                      <div className="truncate text-sm text-[#4d6470]">
+                        {option.party}
+                      </div>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </section>
 
-        <footer className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-[rgba(15,28,36,0.12)] pt-6">
+        <footer
+          className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-[rgba(15,28,36,0.12)] pt-6 transition-all duration-700 ease-out"
+          style={{
+            opacity: stage >= 4 ? 1 : 0,
+            transform: stage >= 4 ? "translateY(0)" : "translateY(10px)",
+          }}
+        >
           <p className="text-base text-[#4d6470]">
             已收到{" "}
             <span className="font-semibold tabular-nums text-[#0f1c24]">

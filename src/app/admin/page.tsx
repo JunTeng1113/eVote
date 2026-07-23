@@ -34,6 +34,7 @@ import {
 import { buildVoteShareUrl } from "@/lib/election-share";
 import { readResponseJson } from "@/lib/read-response-json";
 import { CopyVoteLinkButton } from "@/components/copy-vote-link-button";
+import { useConfirmDialog } from "@/components/confirm-dialog";
 import { AdminPageSkeleton } from "@/components/loading-skeletons";
 import {
   ListPagination,
@@ -297,6 +298,7 @@ function StepBadge({
 export default function AdminPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const [ready, setReady] = useState(false);
   const [isSystemAdmin, setIsSystemAdmin] = useState(false);
   const [section, setSection] = useState<AdminSection>("list");
@@ -709,7 +711,13 @@ export default function AdminPage() {
     if (!selectedId) {
       return;
     }
-    if (!window.confirm(`確定移除共同管理者 ${email}？`)) {
+    const confirmed = await confirm({
+      title: "移除共同管理者",
+      description: `確定移除共同管理者 ${email}？`,
+      confirmLabel: "移除",
+      destructive: true,
+    });
+    if (!confirmed) {
       return;
     }
     setBusy(true);
@@ -813,25 +821,31 @@ export default function AdminPage() {
       return false;
     }
     if (action === "close") {
-      const confirmed = window.confirm(
-        "確定要截止投票嗎？截止後投票權人將無法再送出選票。",
-      );
+      const confirmed = await confirm({
+        title: "截止投票",
+        description: "確定要截止投票嗎？截止後投票權人將無法再送出選票。",
+        confirmLabel: "截止投票",
+      });
       if (!confirmed) {
         return false;
       }
     }
     if (action === "reopen") {
-      const confirmed = window.confirm(
-        "確定要恢復投票嗎？恢復後投票權人可再次送出選票。",
-      );
+      const confirmed = await confirm({
+        title: "恢復投票",
+        description: "確定要恢復投票嗎？恢復後投票權人可再次送出選票。",
+        confirmLabel: "恢復投票",
+      });
       if (!confirmed) {
         return false;
       }
     }
     if (action === "tally") {
-      const confirmed = window.confirm(
-        "確定要執行開票嗎？開票後將公布結果，且無法再恢復投票。",
-      );
+      const confirmed = await confirm({
+        title: "執行開票",
+        description: "確定要執行開票嗎？開票後將公布結果，且無法再恢復投票。",
+        confirmLabel: "執行開票",
+      });
       if (!confirmed) {
         return false;
       }
@@ -862,14 +876,23 @@ export default function AdminPage() {
     if (!selectedId) {
       return;
     }
-    if (
-      !window.confirm(
+    const first = await confirm({
+      title: "重設此投票",
+      description:
         "確定要重設此投票嗎？選票與開票結果將清除，並回到投票中狀態（保留本場名單）。",
-      )
-    ) {
+      confirmLabel: "繼續",
+      destructive: true,
+    });
+    if (!first) {
       return;
     }
-    if (!window.confirm("請再次確認：真的要重設此投票？")) {
+    const second = await confirm({
+      title: "再次確認",
+      description: "請再次確認：真的要重設此投票？",
+      confirmLabel: "重設",
+      destructive: true,
+    });
+    if (!second) {
       return;
     }
     setBusy(true);
@@ -892,10 +915,22 @@ export default function AdminPage() {
     if (!selectedId) {
       return;
     }
-    if (!window.confirm("確定刪除此投票？此操作無法復原。")) {
+    const first = await confirm({
+      title: "刪除投票",
+      description: "確定刪除此投票？此操作無法復原。",
+      confirmLabel: "繼續",
+      destructive: true,
+    });
+    if (!first) {
       return;
     }
-    if (!window.confirm("請再次確認：真的要永久刪除此投票？")) {
+    const second = await confirm({
+      title: "再次確認",
+      description: "請再次確認：真的要永久刪除此投票？",
+      confirmLabel: "永久刪除",
+      destructive: true,
+    });
+    if (!second) {
       return;
     }
     setBusy(true);
@@ -2030,6 +2065,7 @@ export default function AdminPage() {
           }}
         />
       ) : null}
+      {confirmDialog}
     </div>
   );
 }
