@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { buildVoteShareUrl } from "@/lib/election-share";
 
 export type ProjectionElection = {
   electionId: string;
@@ -52,15 +53,30 @@ function formatCountdown(ms: number): {
 function phaseLabel(phase: string): string {
   switch (phase) {
     case "voting":
-      return "投票進行中";
+      return "投票中";
     case "closed":
-      return "投票已截止";
+      return "已截止";
     case "mixing":
       return "開票中";
     case "tallied":
       return "已開票";
     default:
       return phase;
+  }
+}
+
+function phaseAccent(phase: string): string {
+  switch (phase) {
+    case "voting":
+      return "#0b4f6c";
+    case "closed":
+      return "#b45309";
+    case "mixing":
+      return "#1b7a6e";
+    case "tallied":
+      return "#1b7a6e";
+    default:
+      return "#0b4f6c";
   }
 }
 
@@ -107,8 +123,16 @@ export function ElectionProjectionView({
     ? new Date(election.votingEndsAt).getTime()
     : Number.NaN;
   const remainingMs = Number.isFinite(endMs) ? endMs - now : 0;
-  const countdown = formatCountdown(remainingMs);
+  const phase = phaseLabel(election.phase);
+  const accent = phaseAccent(election.phase);
   const options = election.candidates;
+  const [voteUrl, setVoteUrl] = useState("");
+
+  useEffect(() => {
+    setVoteUrl(
+      buildVoteShareUrl(election.electionId, window.location.origin),
+    );
+  }, [election.electionId]);
 
   useEffect(() => {
     const node = rootRef.current;
@@ -149,22 +173,21 @@ export function ElectionProjectionView({
       }}
     >
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-6 py-6 sm:px-10 sm:py-8">
-        <div className="flex items-start justify-between gap-4">
-          <Badge className="text-sm">{phaseLabel(election.phase)}</Badge>
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-sm font-medium tracking-wide text-[#0b4f6c]">
+            eVote 現場投影
+          </p>
           <Button type="button" variant="outline" onClick={onClose}>
             結束全螢幕
           </Button>
         </div>
 
-        <header className="mt-8 space-y-4 text-center">
-          <p className="text-sm font-medium tracking-wide text-[#0b4f6c]">
-            eVote 現場投影
-          </p>
-          <h1 className="font-[family-name:var(--font-display)] text-4xl font-semibold leading-tight text-[#0b4f6c] sm:text-5xl md:text-6xl">
+        <header className="mt-6 space-y-3 text-center">
+          <h1 className="font-[family-name:var(--font-display)] text-3xl font-semibold leading-tight text-[#0f1c24] sm:text-4xl">
             {election.title}
           </h1>
           {election.description.trim() ? (
-            <p className="mx-auto max-w-3xl text-lg text-[#4d6470] sm:text-xl">
+            <p className="mx-auto max-w-3xl whitespace-pre-wrap text-base text-[#4d6470] sm:text-lg">
               {election.description}
             </p>
           ) : null}
@@ -175,27 +198,53 @@ export function ElectionProjectionView({
           ) : null}
         </header>
 
-        {showCountdown ? (
-          <div className="my-10 flex flex-col items-center justify-center gap-3">
-            <p className="text-base text-[#4d6470] sm:text-lg">
-              {election.phase === "voting"
-                ? countdown.expired
-                  ? "投票時間已到"
-                  : "距離投票截止"
-                : "投票已截止"}
+        <div className="my-8 flex flex-1 flex-col items-center justify-center gap-8 text-center sm:my-10 lg:flex-row lg:items-center lg:gap-12 lg:text-left">
+          <div className="flex flex-col items-center gap-4 lg:items-start">
+            <p className="text-sm font-medium tracking-[0.2em] text-[#4d6470] sm:text-base">
+              目前階段
             </p>
-            <div
-              className="font-[family-name:var(--font-display)] text-6xl font-semibold tabular-nums tracking-tight text-[#0f1c24] sm:text-7xl md:text-8xl"
+            <p
+              className="font-[family-name:var(--font-display)] text-6xl font-semibold tracking-tight sm:text-7xl md:text-8xl"
+              style={{ color: accent }}
               aria-live="polite"
             >
-              {election.phase === "voting" ? countdown.label : "00:00:00"}
-            </div>
+              {phase}
+            </p>
+            {showCountdown ? (
+              <div className="mt-2 space-y-2 text-center lg:text-left">
+                <p className="text-base text-[#4d6470] sm:text-lg">
+                  {election.phase === "voting"
+                    ? countdown.expired
+                      ? "投票時間已到"
+                      : "距離投票截止"
+                    : "倒數已結束"}
+                </p>
+                <div className="font-[family-name:var(--font-display)] text-4xl font-semibold tabular-nums tracking-tight text-[#0f1c24] sm:text-5xl">
+                  {election.phase === "voting" ? countdown.label : "00:00:00"}
+                </div>
+              </div>
+            ) : null}
           </div>
-        ) : (
-          <div className="my-8" />
-        )}
 
-        <section className="flex-1">
+          {voteUrl ? (
+            <div className="flex flex-col items-center gap-3 rounded-2xl border border-[rgba(15,28,36,0.12)] bg-white/90 px-6 py-5">
+              <QRCodeSVG
+                value={voteUrl}
+                size={200}
+                level="M"
+                bgColor="#ffffff"
+                fgColor="#0f1c24"
+                title="投票連結 QR Code"
+              />
+              <p className="text-sm font-medium text-[#0b4f6c]">掃描即可投票</p>
+              <p className="max-w-[220px] break-all text-center text-xs text-[#4d6470]">
+                {voteUrl}
+              </p>
+            </div>
+          ) : null}
+        </div>
+
+        <section>
           <h2 className="mb-4 text-center text-sm font-medium uppercase tracking-wide text-[#4d6470]">
             投票選項（{options.length}）
           </h2>
@@ -251,11 +300,7 @@ export function ElectionProjectionView({
           </p>
           <div className="flex flex-wrap gap-3">
             {election.phase === "voting" ? (
-              <Button
-                size="lg"
-                disabled={busy}
-                onClick={onCloseVoting}
-              >
+              <Button size="lg" disabled={busy} onClick={onCloseVoting}>
                 截止投票
               </Button>
             ) : null}
@@ -271,7 +316,7 @@ export function ElectionProjectionView({
             ) : null}
             {election.phase === "tallied" ? (
               <Button size="lg" onClick={onViewResults}>
-                看開票結果
+                查看結果
               </Button>
             ) : null}
           </div>

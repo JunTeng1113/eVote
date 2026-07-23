@@ -28,6 +28,7 @@ import {
 } from "@/lib/export-results";
 import { calcPct, formatPct, formatTalliedAt } from "@/lib/results-ranking";
 import { readResponseJson } from "@/lib/read-response-json";
+import { ResultsProjectionView } from "@/components/results-projection-view";
 import { toast } from "sonner";
 
 type ElectionResult = {
@@ -123,6 +124,7 @@ function ResultsContent() {
   const [loading, setLoading] = useState(Boolean(electionId));
   const [exporting, setExporting] = useState(false);
   const [namedPage, setNamedPage] = useState(1);
+  const [projectionOpen, setProjectionOpen] = useState(false);
 
   async function load(id: string) {
     setLoading(true);
@@ -294,6 +296,15 @@ function ResultsContent() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {selected.tallyDetail ? (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setProjectionOpen(true)}
+            >
+              全螢幕檢視
+            </Button>
+          ) : null}
           {exportInput ? (
             <>
               <Button
@@ -461,6 +472,25 @@ function ResultsContent() {
           )}
         </CardContent>
       </Card>
+
+      {projectionOpen && selected.tallyDetail ? (
+        <ResultsProjectionView
+          result={{
+            title: selected.title,
+            modeLabel: modeLabel(selected.votingMode),
+            talliedAt: formatTalliedAt(selected.tallyDetail.talliedAt),
+            eligibleLabel:
+              selected.votingMode === "open" ? "已投票人數" : "投票權人數",
+            eligibleCount:
+              selected.votingMode === "open" ? validVotes : eligibleVoters,
+            totalVotes: selected.tallyDetail.total,
+            turnout,
+            candidates: selected.candidates,
+            counts: selected.tallyDetail.counts,
+          }}
+          onClose={() => setProjectionOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
