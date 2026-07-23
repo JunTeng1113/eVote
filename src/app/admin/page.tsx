@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,6 +21,7 @@ import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { CandidateVisual } from "@/components/candidate-visual";
+import { ElectionProjectionView } from "@/components/election-projection-view";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -287,12 +289,14 @@ function StepBadge({
 }
 
 export default function AdminPage() {
+  const router = useRouter();
   const { data: session, status } = useSession();
   const [ready, setReady] = useState(false);
   const [isSystemAdmin, setIsSystemAdmin] = useState(false);
   const [section, setSection] = useState<AdminSection>("list");
   const [createStep, setCreateStep] = useState<CreateStep>(1);
   const [detailTab, setDetailTab] = useState<DetailTab>("overview");
+  const [projectionOpen, setProjectionOpen] = useState(false);
 
   const [elections, setElections] = useState<ElectionSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -798,16 +802,16 @@ export default function AdminPage() {
     await loadElections(selectedId);
   }
 
-  async function runAction(action: "close" | "reopen" | "tally") {
+  async function runAction(action: "close" | "reopen" | "tally"): Promise<boolean> {
     if (!selectedId) {
-      return;
+      return false;
     }
     if (action === "close") {
       const confirmed = window.confirm(
         "確定要截止投票嗎？截止後投票權人將無法再送出選票。",
       );
       if (!confirmed) {
-        return;
+        return false;
       }
     }
     if (action === "reopen") {
@@ -815,7 +819,7 @@ export default function AdminPage() {
         "確定要恢復投票嗎？恢復後投票權人可再次送出選票。",
       );
       if (!confirmed) {
-        return;
+        return false;
       }
     }
     if (action === "tally") {
@@ -823,7 +827,7 @@ export default function AdminPage() {
         "確定要執行開票嗎？開票後將公布結果，且無法再恢復投票。",
       );
       if (!confirmed) {
-        return;
+        return false;
       }
     }
     setBusy(true);
@@ -836,7 +840,7 @@ export default function AdminPage() {
     setBusy(false);
     if (!data.ok) {
       toast.error(data.error ?? "操作失敗");
-      return;
+      return false;
     }
     const messages: Record<typeof action, string> = {
       close: "已截止投票",
@@ -845,6 +849,7 @@ export default function AdminPage() {
     };
     toast.success(messages[action]);
     await loadElections(selectedId);
+    return true;
   }
 
   async function onReset() {
@@ -900,6 +905,7 @@ export default function AdminPage() {
       return;
     }
     toast.success("已刪除投票");
+    setProjectionOpen(false);
     setSelectedId(null);
     setVoters([]);
     await loadElections(null);
@@ -1575,6 +1581,7 @@ export default function AdminPage() {
                 <Button
                   variant="outline"
                   onClick={() => {
+                    setProjectionOpen(false);
                     setSelectedId(null);
                     setSelectedDetail(null);
                     setVoters([]);
@@ -1658,6 +1665,13 @@ export default function AdminPage() {
                         >
                           開啟投票頁
                         </Link>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => setProjectionOpen(true)}
+                      >
+                        全螢幕檢視
                       </Button>
                     </div>
                     {selected.votingMode === "open" ? (
@@ -1907,6 +1921,41 @@ export default function AdminPage() {
             </>
           )}
         </div>
+      ) : null}
+
+      {projectionOpen && selected ? (
+        <ElectionProjectionView
+          election={{
+            electionId: selected.electionId,
+            title: selected.title,
+            description: selected.description,
+            phase: selected.phase,
+            scheduleMode: selected.scheduleMode,
+            votingEndsAt: selected.votingEndsAt,
+            scheduleLabel: selected.scheduleLabel,
+            candidates: selected.candidates ?? [],
+            ballotCount: selected.stats.ballotCount,
+          }}
+          busy={busy}
+          onClose={() => setProjectionOpen(false)}
+          onCloseVoting={() => {
+            void runAction("close");
+          }}
+          onTally={() => {
+            void (async () => {
+              const ok = await runAction("tally");
+              if (!ok) {
+                return;
+              }
+              setProjectionOpen(false);
+              router.push(`/results?id=${encodeURIComponent(selected.electionId)}`);
+            })();
+          }}
+          onViewResults={() => {
+            setProjectionOpen(false);
+            router.push(`/results?id=${encodeURIComponent(selected.electionId)}`);
+          }}
+        />
       ) : null}
     </div>
   );
