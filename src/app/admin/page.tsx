@@ -1644,64 +1644,32 @@ export default function AdminPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="flex flex-col gap-6 md:flex-row md:items-start md:gap-8">
-                      <div className="min-w-0 w-full max-w-2xl flex-1 space-y-4">
-                        <div className="space-y-3">
-                          <div className="whitespace-pre-wrap break-words text-sm leading-relaxed text-[var(--muted-foreground)]">
-                            {selected.description.trim()
-                              ? selected.description
-                              : "（無說明）"}
-                          </div>
-                          {selected.scheduleMode === "timed" ||
-                          selected.scheduleMode === "duration" ? (
-                            <p className="text-sm text-[var(--muted-foreground)]">
-                              投票時間：{selected.scheduleLabel}
-                            </p>
-                          ) : null}
-                          {selected.votingMode === "open" ? (
-                            <Alert>
-                              此場為無須登入投票，請透過上方連結分享給參與者。一般投票列表不會顯示此場。
-                            </Alert>
-                          ) : null}
+                    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(260px,20rem)]">
+                      <div className="min-w-0 space-y-3">
+                        <div className="whitespace-pre-wrap break-words text-sm leading-relaxed text-[var(--muted-foreground)]">
+                          {selected.description.trim()
+                            ? selected.description
+                            : "（無說明）"}
                         </div>
-
-                        <div className="space-y-3">
-                          <div className="text-sm font-medium">投票選項</div>
-                          {(selected.candidates ?? []).map((c) => (
-                            <div
-                              key={c.id}
-                              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] p-3"
-                            >
-                              <CandidateVisual
-                                name={c.name}
-                                party={c.party}
-                                imageUrl={c.imageUrl}
-                              />
-                              {selected.stats.ballotCount === 0 &&
-                              selected.phase === "voting" ? (
-                                <Input
-                                  type="file"
-                                  accept="image/png,image/jpeg,image/webp,image/gif"
-                                  className="max-w-56"
-                                  disabled={busy}
-                                  onChange={(event) => {
-                                    const file = event.target.files?.[0] ?? null;
-                                    void onExistingImageChange(c.id, file);
-                                    event.target.value = "";
-                                  }}
-                                />
-                              ) : null}
-                            </div>
-                          ))}
-                        </div>
+                        {selected.scheduleMode === "timed" ||
+                        selected.scheduleMode === "duration" ? (
+                          <p className="text-sm text-[var(--muted-foreground)]">
+                            投票時間：{selected.scheduleLabel}
+                          </p>
+                        ) : null}
+                        {selected.votingMode === "open" ? (
+                          <Alert>
+                            此場為無須登入投票，請透過上方連結分享給參與者。一般投票列表不會顯示此場。
+                          </Alert>
+                        ) : null}
                       </div>
 
-                      <aside className="w-full shrink-0 space-y-4 rounded-lg border border-[var(--border)] bg-[var(--muted)]/40 p-4 md:sticky md:top-4 md:w-64">
+                      <aside className="space-y-4 self-start rounded-lg border border-[var(--border)] bg-[var(--muted)]/40 p-4 lg:sticky lg:top-4">
                         <div className="space-y-2">
                           <div className="text-xs font-medium text-[var(--muted-foreground)]">
                             分享與檢視
                           </div>
-                          <div className="grid grid-cols-2 gap-2 md:grid-cols-1">
+                          <div className="flex flex-col gap-2">
                             <CopyVoteLinkButton
                               electionId={selected.electionId}
                               variant="outline"
@@ -1799,6 +1767,37 @@ export default function AdminPage() {
                           </p>
                         </div>
                       </aside>
+                    </div>
+
+                    <Separator />
+                    <div className="space-y-3">
+                      <div className="text-sm font-medium">投票選項</div>
+                      {(selected.candidates ?? []).map((c) => (
+                        <div
+                          key={c.id}
+                          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] p-3"
+                        >
+                          <CandidateVisual
+                            name={c.name}
+                            party={c.party}
+                            imageUrl={c.imageUrl}
+                          />
+                          {selected.stats.ballotCount === 0 &&
+                          selected.phase === "voting" ? (
+                            <Input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp,image/gif"
+                              className="max-w-56"
+                              disabled={busy}
+                              onChange={(event) => {
+                                const file = event.target.files?.[0] ?? null;
+                                void onExistingImageChange(c.id, file);
+                                event.target.value = "";
+                              }}
+                            />
+                          ) : null}
+                        </div>
+                      ))}
                     </div>
 
                     <Separator />
