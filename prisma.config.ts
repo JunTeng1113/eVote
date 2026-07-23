@@ -3,12 +3,32 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
+/**
+ * Migrations need a direct Postgres connection (advisory locks).
+ * Neon pooler URLs often time out on `migrate deploy`; prefer DIRECT_URL
+ * or strip `-pooler` from the Neon hostname when only DATABASE_URL is set.
+ */
+function migrateDatasourceUrl(): string | undefined {
+  const direct = process.env.DIRECT_URL?.trim();
+  if (direct) {
+    return direct;
+  }
+  const databaseUrl = process.env.DATABASE_URL?.trim();
+  if (!databaseUrl) {
+    return undefined;
+  }
+  if (databaseUrl.includes("-pooler.") && databaseUrl.includes("neon.tech")) {
+    return databaseUrl.replace("-pooler.", ".");
+  }
+  return databaseUrl;
+}
+
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    url: migrateDatasourceUrl(),
   },
 });

@@ -108,7 +108,8 @@ npx prisma migrate deploy
 3. 設定環境變數（Production）：
 
 ```env
-DATABASE_URL=（Neon 連線字串）
+DATABASE_URL=（Neon 連線字串；應用程式可用 pooled）
+DIRECT_URL=（選填，Neon 非 pooler 直連；遷移建議使用，未設時會自動去掉 -pooler）
 AUTH_SECRET=（隨機字串，可用 openssl rand -base64 32）
 AUTH_GOOGLE_ID=...
 AUTH_GOOGLE_SECRET=...
@@ -116,6 +117,8 @@ AUTH_URL=https://你的專案.vercel.app
 AUTH_TRUST_HOST=true
 ADMIN_EMAILS=你的管理員@gmail.com
 ```
+
+> `prisma migrate deploy` 需要能取得 Postgres advisory lock。若 `DATABASE_URL` 是 Neon `-pooler` 位址，建置可能出現 `P1002` 逾時；請改設 `DIRECT_URL` 為不含 `-pooler` 的直連，或沿用本專案自動轉換。
 
 4. Build Command 使用專案預設：`prisma generate && prisma migrate deploy && next build`  
 5. Deploy 完成後取得公開網址
