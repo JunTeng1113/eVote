@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CandidateVisual } from "@/components/candidate-visual";
 import { ResultsPieChart } from "@/components/results-pie-chart";
 import {
@@ -30,14 +30,31 @@ function BarRow({
   item,
   total,
   compact = false,
+  delayMs = 0,
 }: {
   item: RankedResultItem;
   total: number;
   compact?: boolean;
+  delayMs?: number;
 }) {
+  const [animate, setAnimate] = useState(false);
   const widthPct = total > 0 ? Math.min(100, (item.votes / total) * 100) : 0;
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setAnimate(true), 40 + delayMs);
+    return () => {
+      window.clearTimeout(id);
+    };
+  }, [delayMs, item.id, item.votes]);
+
   return (
-    <div className="space-y-2">
+    <div
+      className="space-y-2 transition-all duration-500 ease-out"
+      style={{
+        opacity: animate ? 1 : 0,
+        transform: animate ? "translateY(0)" : "translateY(10px)",
+      }}
+    >
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <span className="w-8 shrink-0 text-sm tabular-nums text-[var(--muted-foreground)]">
@@ -68,7 +85,10 @@ function BarRow({
       <div className="h-2 overflow-hidden rounded-full bg-[var(--muted)]">
         <div
           className="h-full rounded-full bg-[var(--secondary)]"
-          style={{ width: `${widthPct}%` }}
+          style={{
+            width: animate ? `${widthPct}%` : "0%",
+            transition: `width 0.85s cubic-bezier(0.22, 1, 0.36, 1) ${delayMs}ms`,
+          }}
         />
       </div>
     </div>
@@ -194,8 +214,13 @@ export function ResultsBreakdown({
         <HighestVoteSummary ranked={ranked} />
         <ResultsPieChart items={pieItems} mode="all" includeZeroInLegend />
         <div className="space-y-4">
-          {ranked.map((item) => (
-            <BarRow key={item.id} item={item} total={total} />
+          {ranked.map((item, index) => (
+            <BarRow
+              key={item.id}
+              item={item}
+              total={total}
+              delayMs={Math.min(index, 12) * 60}
+            />
           ))}
         </div>
       </div>
@@ -213,8 +238,14 @@ export function ResultsBreakdown({
           includeZeroInLegend
         />
         <div className="space-y-4">
-          {pageItems.map((item) => (
-            <BarRow key={item.id} item={item} total={total} compact />
+          {pageItems.map((item, index) => (
+            <BarRow
+              key={item.id}
+              item={item}
+              total={total}
+              compact
+              delayMs={Math.min(index, 12) * 60}
+            />
           ))}
         </div>
         <ListPagination

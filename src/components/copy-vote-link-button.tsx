@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,14 +12,21 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { buildVoteShareUrl } from "@/lib/election-share";
 
 type CopyVoteLinkButtonProps = {
   electionId: string;
-  size?: "default" | "sm";
+  size?: "default" | "sm" | "icon";
   variant?: "default" | "outline" | "secondary" | "ghost";
   label?: string;
   className?: string;
+  /** 僅顯示圖示，hover 以 Tooltip 提示 */
+  iconOnly?: boolean;
 };
 
 function shareUrl(electionId: string): string {
@@ -28,19 +36,13 @@ function shareUrl(electionId: string): string {
   );
 }
 
-function copyHint(): string {
-  if (typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.userAgent)) {
-    return "按下 ⌘C 鍵即可複製";
-  }
-  return "按下 Ctrl+C 鍵即可複製";
-}
-
 export function CopyVoteLinkButton({
   electionId,
   size = "default",
   variant = "outline",
   label = "複製連結",
   className,
+  iconOnly = false,
 }: CopyVoteLinkButtonProps) {
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -73,13 +75,30 @@ export function CopyVoteLinkButton({
     toast.success("已複製投票連結");
   }
 
+  const triggerButton = (
+    <Button
+      type="button"
+      size={iconOnly ? "icon" : size}
+      variant={variant}
+      className={className}
+      aria-label={label}
+    >
+      {iconOnly ? <Link2 className="h-4 w-4" aria-hidden /> : label}
+    </Button>
+  );
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button type="button" size={size} variant={variant} className={className}>
-          {label}
-        </Button>
-      </DialogTrigger>
+      {iconOnly ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DialogTrigger asChild>{triggerButton}</DialogTrigger>
+          </TooltipTrigger>
+          <TooltipContent>{label}</TooltipContent>
+        </Tooltip>
+      ) : (
+        <DialogTrigger asChild>{triggerButton}</DialogTrigger>
+      )}
       <DialogContent>
         <DialogTitle>複製投票連結</DialogTitle>
         <DialogDescription className="mt-1">

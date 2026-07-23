@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -117,8 +117,10 @@ function buildExportInput(
 }
 
 function ResultsContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const electionId = searchParams.get("id");
+  const openProjectionParam = searchParams.get("projection") === "1";
   const [selected, setSelected] = useState<ElectionResult | null>(null);
   const [missing, setMissing] = useState(false);
   const [loading, setLoading] = useState(Boolean(electionId));
@@ -178,6 +180,13 @@ function ResultsContent() {
       alive = false;
     };
   }, [electionId]);
+
+  useEffect(() => {
+    if (!openProjectionParam || !selected?.tallyDetail) {
+      return;
+    }
+    setProjectionOpen(true);
+  }, [openProjectionParam, selected?.tallyDetail]);
 
   async function runExport(
     kind:
@@ -488,7 +497,14 @@ function ResultsContent() {
             candidates: selected.candidates,
             counts: selected.tallyDetail.counts,
           }}
-          onClose={() => setProjectionOpen(false)}
+          onClose={() => {
+            setProjectionOpen(false);
+            if (openProjectionParam && electionId) {
+              router.replace(
+                `/results?id=${encodeURIComponent(electionId)}`,
+              );
+            }
+          }}
         />
       ) : null}
     </div>

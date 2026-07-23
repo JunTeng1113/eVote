@@ -227,7 +227,7 @@ export function ElectionProjectionView({
             ) : null}
           </div>
 
-          {voteUrl ? (
+          {voteUrl && election.phase !== "tallied" ? (
             <div className="flex flex-col items-center gap-3 rounded-2xl border border-[rgba(15,28,36,0.12)] bg-white/90 px-6 py-5">
               <QRCodeSVG
                 value={voteUrl}

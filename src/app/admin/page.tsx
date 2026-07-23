@@ -41,6 +41,12 @@ import {
   slicePage,
 } from "@/components/list-pagination";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Maximize2 } from "lucide-react";
 
 const titleFormSchema = z
   .object({
@@ -1669,26 +1675,28 @@ export default function AdminPage() {
                           <div className="text-xs font-medium text-[var(--muted-foreground)]">
                             分享與檢視
                           </div>
-                          <div className="flex flex-col gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <CopyVoteLinkButton
                               electionId={selected.electionId}
                               variant="outline"
-                              className="w-full"
+                              iconOnly
                             />
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              className="w-full"
-                              onClick={() => setProjectionOpen(true)}
-                            >
-                              全螢幕檢視
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="icon"
+                                  aria-label="全螢幕檢視"
+                                  onClick={() => setProjectionOpen(true)}
+                                >
+                                  <Maximize2 className="h-4 w-4" aria-hidden />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>全螢幕檢視</TooltipContent>
+                            </Tooltip>
                             {selected.phase === "tallied" ? (
-                              <Button
-                                asChild
-                                variant="outline"
-                                className="w-full"
-                              >
+                              <Button asChild variant="outline">
                                 <Link
                                   href={`/results?id=${encodeURIComponent(selected.electionId)}`}
                                 >
@@ -2009,12 +2017,16 @@ export default function AdminPage() {
                 return;
               }
               setProjectionOpen(false);
-              router.push(`/results?id=${encodeURIComponent(selected.electionId)}`);
+              router.push(
+                `/results?id=${encodeURIComponent(selected.electionId)}&projection=1`,
+              );
             })();
           }}
           onViewResults={() => {
             setProjectionOpen(false);
-            router.push(`/results?id=${encodeURIComponent(selected.electionId)}`);
+            router.push(
+              `/results?id=${encodeURIComponent(selected.electionId)}&projection=1`,
+            );
           }}
         />
       ) : null}

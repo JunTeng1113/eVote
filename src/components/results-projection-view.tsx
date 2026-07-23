@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   RESULT_PALETTE,
@@ -25,6 +25,22 @@ export type ResultsProjectionInput = {
   counts: Record<string, number>;
 };
 
+function useReveal(delayMs = 80) {
+  const [stage, setStage] = useState(0);
+  useEffect(() => {
+    const timers = [
+      window.setTimeout(() => setStage(1), delayMs),
+      window.setTimeout(() => setStage(2), delayMs + 350),
+      window.setTimeout(() => setStage(3), delayMs + 700),
+      window.setTimeout(() => setStage(4), delayMs + 1050),
+    ];
+    return () => {
+      timers.forEach((id) => window.clearTimeout(id));
+    };
+  }, [delayMs]);
+  return stage;
+}
+
 export function ResultsProjectionView({
   result,
   onClose,
@@ -35,6 +51,7 @@ export function ResultsProjectionView({
   const rootRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const stage = useReveal();
 
   const ranked = rankResults(
     result.candidates,
@@ -91,7 +108,13 @@ export function ResultsProjectionView({
           </Button>
         </div>
 
-        <header className="mt-6 space-y-3 text-center">
+        <header
+          className="mt-6 space-y-3 text-center transition-all duration-700 ease-out"
+          style={{
+            opacity: stage >= 1 ? 1 : 0,
+            transform: stage >= 1 ? "translateY(0)" : "translateY(12px)",
+          }}
+        >
           <h1 className="font-[family-name:var(--font-display)] text-3xl font-semibold leading-tight text-[#0f1c24] sm:text-4xl">
             {result.title}
           </h1>
@@ -101,17 +124,33 @@ export function ResultsProjectionView({
         </header>
 
         <div className="my-8 flex flex-col items-center justify-center gap-4 text-center sm:my-10">
-          <p className="text-sm font-medium tracking-[0.2em] text-[#4d6470] sm:text-base">
+          <p
+            className="text-sm font-medium tracking-[0.2em] text-[#4d6470] transition-all duration-700 ease-out sm:text-base"
+            style={{
+              opacity: stage >= 1 ? 1 : 0,
+              transform: stage >= 1 ? "translateY(0)" : "translateY(8px)",
+            }}
+          >
             目前階段
           </p>
           <p
-            className="font-[family-name:var(--font-display)] text-6xl font-semibold tracking-tight text-[#1b7a6e] sm:text-7xl md:text-8xl"
+            className="font-[family-name:var(--font-display)] text-6xl font-semibold tracking-tight text-[#1b7a6e] transition-all duration-700 ease-out sm:text-7xl md:text-8xl"
+            style={{
+              opacity: stage >= 1 ? 1 : 0,
+              transform: stage >= 1 ? "scale(1)" : "scale(0.88)",
+            }}
             aria-live="polite"
           >
             已開票
           </p>
           {leaders.length > 0 ? (
-            <div className="mt-2 max-w-2xl space-y-1">
+            <div
+              className="mt-2 max-w-2xl space-y-1 transition-all duration-700 ease-out"
+              style={{
+                opacity: stage >= 2 ? 1 : 0,
+                transform: stage >= 2 ? "translateY(0)" : "translateY(16px)",
+              }}
+            >
               <p className="text-sm text-[#4d6470]">最高票</p>
               <p className="text-2xl font-semibold text-[#0f1c24] sm:text-3xl">
                 {leaders.map((item) => item.name).join("、")}
@@ -131,7 +170,14 @@ export function ResultsProjectionView({
           ) : null}
         </div>
 
-        <div className="mb-8 grid gap-3 sm:grid-cols-3">
+        <div
+          className="mb-8 grid gap-3 sm:grid-cols-3"
+          style={{
+            opacity: stage >= 3 ? 1 : 0,
+            transform: stage >= 3 ? "translateY(0)" : "translateY(16px)",
+            transition: "opacity 0.7s ease-out, transform 0.7s ease-out",
+          }}
+        >
           {[
             {
               label: result.eligibleLabel,
@@ -153,7 +199,10 @@ export function ResultsProjectionView({
         </div>
 
         <section className="flex-1">
-          <h2 className="mb-4 text-center text-sm font-medium uppercase tracking-wide text-[#4d6470]">
+          <h2
+            className="mb-4 text-center text-sm font-medium uppercase tracking-wide text-[#4d6470] transition-opacity duration-700"
+            style={{ opacity: stage >= 4 ? 1 : 0 }}
+          >
             完整結果（{ranked.length}）
           </h2>
           <ul className="space-y-3">
@@ -163,10 +212,17 @@ export function ResultsProjectionView({
                 result.totalVotes > 0
                   ? Math.min(100, (item.votes / result.totalVotes) * 100)
                   : 0;
+              const rowDelay = Math.min(index, 24) * 70;
+              const showRow = stage >= 4;
               return (
                 <li
                   key={item.id}
                   className="rounded-xl border border-[rgba(15,28,36,0.12)] bg-white/80 px-4 py-3"
+                  style={{
+                    opacity: showRow ? 1 : 0,
+                    transform: showRow ? "translateY(0)" : "translateY(18px)",
+                    transition: `opacity 0.55s ease-out ${rowDelay}ms, transform 0.55s ease-out ${rowDelay}ms`,
+                  }}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
@@ -197,8 +253,9 @@ export function ResultsProjectionView({
                     <div
                       className="h-full rounded-full"
                       style={{
-                        width: `${widthPct}%`,
+                        width: showRow ? `${widthPct}%` : "0%",
                         backgroundColor: color,
+                        transition: `width 0.9s cubic-bezier(0.22, 1, 0.36, 1) ${rowDelay + 120}ms`,
                       }}
                     />
                   </div>
