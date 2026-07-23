@@ -123,6 +123,7 @@ export function ElectionProjectionView({
     ? new Date(election.votingEndsAt).getTime()
     : Number.NaN;
   const remainingMs = Number.isFinite(endMs) ? endMs - now : 0;
+  const countdown = formatCountdown(remainingMs);
   const phase = phaseLabel(election.phase);
   const accent = phaseAccent(election.phase);
   const options = election.candidates;
