@@ -206,31 +206,35 @@ export function VoteWizard({
     }
     let alive = true;
     void (async () => {
-      setListLoading(true);
-      const res = await fetch("/api/eligibility");
-      const data = (await res.json()) as {
-        ok?: boolean;
-        elections?: ElectionOption[];
-      };
-      if (!alive) {
-        return;
-      }
-      setListLoading(false);
-      if (!data.elections) {
-        return;
-      }
-      // 一般列表只顯示自己有投票資格的場次（不含無須登入場次）
-      const eligibleOptions = data.elections.filter((e) => e.eligible);
-      startTransition(() => {
-        setOptions(eligibleOptions);
-        setListPage(1);
-        setShowList(true);
-      });
+      await refreshList(alive);
     })();
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, presetId]);
+
+  async function refreshList(alive = true) {
+    setListLoading(true);
+    const res = await fetch("/api/eligibility");
+    const data = (await res.json()) as {
+      ok?: boolean;
+      elections?: ElectionOption[];
+    };
+    if (!alive) {
+      return;
+    }
+    setListLoading(false);
+    if (!data.elections) {
+      return;
+    }
+    const eligibleOptions = data.elections.filter((e) => e.eligible);
+    startTransition(() => {
+      setOptions(eligibleOptions);
+      setListPage(1);
+      setShowList(true);
+    });
+  }
 
   // 專屬連結且需登入場次：登入完成後補載資格狀態
   useEffect(() => {
@@ -667,7 +671,18 @@ export function VoteWizard({
       {showList ? (
         <Card>
           <CardHeader>
-            <CardTitle>選擇投票</CardTitle>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <CardTitle>選擇投票</CardTitle>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={listLoading}
+                onClick={() => void refreshList()}
+              >
+                重新整理
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-2">
             {listLoading ? (

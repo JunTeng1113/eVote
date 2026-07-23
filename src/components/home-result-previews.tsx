@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ResultsPieChart } from "@/components/results-pie-chart";
+import { calcPct, formatPct } from "@/lib/results-ranking";
 
 const POLL_DEMO = [
   { id: "agree", label: "同意", value: 128 },
@@ -66,13 +67,13 @@ function ResultBars({
   return (
     <div className="space-y-3">
       {items.map((item) => {
-        const pct = total > 0 ? Math.round((item.value / total) * 100) : 0;
+        const pct = calcPct(item.value, total);
         return (
           <div key={item.id} className="space-y-1.5">
             <div className="flex items-center justify-between gap-2 text-sm">
               <span className="font-medium">{item.label}</span>
               <span className="tabular-nums text-[var(--muted-foreground)]">
-                {item.value} 票（{pct}%）
+                {item.value} 票（{formatPct(pct)}）
               </span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-[var(--muted)]">

@@ -51,16 +51,22 @@ export function rankResults(
     const rank = item.votes === lastVotes ? lastRank : index + 1;
     lastVotes = item.votes;
     lastRank = rank;
-    const pct =
-      total > 0
-        ? Math.round((item.votes / total) * 1000) / 10
-        : 0;
+    const pct = calcPct(item.votes, total);
     return { ...item, rank, pct };
   });
 }
 
+/** 百分比：小數第 2 位無條件捨去。 */
+export function calcPct(part: number, whole: number): number {
+  if (whole <= 0) {
+    return 0;
+  }
+  return Math.floor((part / whole) * 10000) / 100;
+}
+
 export function formatPct(pct: number): string {
-  return Number.isInteger(pct) ? `${pct}%` : `${pct.toFixed(1)}%`;
+  const truncated = Math.floor(pct * 100) / 100;
+  return `${truncated.toFixed(2)}%`;
 }
 
 export function formatTalliedAt(iso: string): string {

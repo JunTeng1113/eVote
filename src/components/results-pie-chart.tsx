@@ -1,6 +1,7 @@
 import {
   RESULT_PALETTE,
   preparePieItems,
+  calcPct,
   formatPct,
   legendItemsPerColumn,
   type PieChartMode,
@@ -165,7 +166,7 @@ export function ResultsPieChart({
           }}
         >
           {legendItems.map((slice) => {
-            const pct = Math.round((slice.value / total) * 1000) / 10;
+            const pct = calcPct(slice.value, total);
             return (
               <li key={slice.id} className="flex min-w-0 items-center gap-2">
                 <span

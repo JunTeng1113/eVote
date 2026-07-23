@@ -1486,12 +1486,25 @@ export default function AdminPage() {
           {!selectedId ? (
             <Card>
               <CardHeader>
-                <CardTitle>投票列表</CardTitle>
-                <CardDescription>
-                  {isSystemAdmin
-                    ? "系統管理者可查看全部投票。"
-                    : "僅顯示你建立或被授權管理的投票。"}
-                </CardDescription>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-1.5">
+                    <CardTitle>投票列表</CardTitle>
+                    <CardDescription>
+                      {isSystemAdmin
+                        ? "系統管理者可查看全部投票。"
+                        : "僅顯示你建立或被授權管理的投票。"}
+                    </CardDescription>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => void loadElections(null)}
+                  >
+                    重新整理
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-2">
                 {elections.length === 0 ? (
@@ -1653,36 +1666,6 @@ export default function AdminPage() {
                       </Alert>
                     ) : null}
                     <Separator />
-                    <div className="space-y-3">
-                      <div className="text-sm font-medium">投票選項</div>
-                      {(selected.candidates ?? []).map((c) => (
-                        <div
-                          key={c.id}
-                          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] p-3"
-                        >
-                          <CandidateVisual
-                            name={c.name}
-                            party={c.party}
-                            imageUrl={c.imageUrl}
-                          />
-                          {selected.stats.ballotCount === 0 &&
-                          selected.phase === "voting" ? (
-                            <Input
-                              type="file"
-                              accept="image/png,image/jpeg,image/webp,image/gif"
-                              className="max-w-56"
-                              disabled={busy}
-                              onChange={(event) => {
-                                const file = event.target.files?.[0] ?? null;
-                                void onExistingImageChange(c.id, file);
-                                event.target.value = "";
-                              }}
-                            />
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                    <Separator />
                     <div className="flex flex-wrap gap-2">
                       <Button
                         disabled={busy || selected.phase !== "voting"}
@@ -1727,6 +1710,36 @@ export default function AdminPage() {
                           看結果
                         </Link>
                       </Button>
+                    </div>
+                    <Separator />
+                    <div className="space-y-3">
+                      <div className="text-sm font-medium">投票選項</div>
+                      {(selected.candidates ?? []).map((c) => (
+                        <div
+                          key={c.id}
+                          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] p-3"
+                        >
+                          <CandidateVisual
+                            name={c.name}
+                            party={c.party}
+                            imageUrl={c.imageUrl}
+                          />
+                          {selected.stats.ballotCount === 0 &&
+                          selected.phase === "voting" ? (
+                            <Input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp,image/gif"
+                              className="max-w-56"
+                              disabled={busy}
+                              onChange={(event) => {
+                                const file = event.target.files?.[0] ?? null;
+                                void onExistingImageChange(c.id, file);
+                                event.target.value = "";
+                              }}
+                            />
+                          ) : null}
+                        </div>
+                      ))}
                     </div>
                   </CardContent>
                 </Card>

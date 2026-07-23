@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import {
   RESULT_PALETTE,
+  calcPct,
   formatPct,
   legendItemsPerColumn,
 } from "@/lib/results-ranking";
@@ -314,7 +315,7 @@ function renderResultsCanvas(
     const row = index % perCol;
     const x = listLeft + col * (colW + colGap);
     const rowY = listTop + row * (rowH + 10 * scale);
-    const pct = Math.round((item.votes / total) * 1000) / 10;
+    const pct = calcPct(item.votes, total);
     const color = RESULT_PALETTE[index % RESULT_PALETTE.length]!;
 
     ctx.fillStyle = color;

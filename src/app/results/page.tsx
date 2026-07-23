@@ -26,7 +26,7 @@ import {
   type PngExportRatio,
   type ResultExportInput,
 } from "@/lib/export-results";
-import { formatTalliedAt } from "@/lib/results-ranking";
+import { calcPct, formatPct, formatTalliedAt } from "@/lib/results-ranking";
 import { readResponseJson } from "@/lib/read-response-json";
 import { toast } from "sonner";
 
@@ -59,8 +59,7 @@ function formatTurnout(validVotes: number, eligibleVoters: number): string {
   if (eligibleVoters <= 0) {
     return "—";
   }
-  const pct = Math.floor((validVotes / eligibleVoters) * 10000) / 100;
-  return `${pct.toFixed(2)}%`;
+  return formatPct(calcPct(validVotes, eligibleVoters));
 }
 
 function phaseText(phase: string): string {
