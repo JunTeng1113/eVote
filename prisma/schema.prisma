@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ElectionPhase {
+  voting
+  closed
+  mixing
+  tallied
+}
+
+enum VotingMode {
+  anonymous
+  named
+}
+
+enum ScheduleMode {
+  unlimited
+  timed
+  duration
+}
+
+model Election {
+  id             String        @id @default(cuid())
+  electionId     String        @unique
+  title          String
+  description    String
+  phase          ElectionPhase @default(voting)
+  votingMode     VotingMode    @default(anonymous)
+  scheduleMode   ScheduleMode  @default(unlimited)
+  votingStartsAt DateTime?
+  votingEndsAt   DateTime?
+  createdByEmail String?
+  mixServers     Json
+  issuer         Json
+  threshold      Json
+  tally          Json?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  candidates   Candidate[]
+  voters       EligibleVoter[]
+  authTickets  AuthTicket[]
+  ballots      Ballot[]
+  namedBallots NamedBallot[]
+  managers     ElectionManager[]
+
+  @@index([createdAt])
+  @@index([createdByEmail])
+}
+
+model ElectionManager {
+  id         String   @id @default(cuid())
+  electionId String
+  email      String
+  createdAt  DateTime @default(now())
+  election   Election @relation(fields: [electionId], references: [electionId], onDelete: Cascade)
+
+  @@unique([electionId, email])
+  @@index([email])
+}
+
+model Candidate {
+  id         String   @id @default(cuid())
+  electionId String
+  key        String
+  name       String
+  party      String
+  imageUrl   String?
+  sortOrder  Int
+  election   Election @relation(fields: [electionId], references: [electionId], onDelete: Cascade)
+
+  @@unique([electionId, key])
+  @@index([electionId, sortOrder])
+}
+
+model EligibleVoter {
+  id             String    @id @default(cuid())
+  electionId     String
+  email          String
+  displayName    String
+  authorized     Boolean   @default(false)
+  authTicketHash String?
+  authorizedAt   DateTime?
+  election       Election  @relation(fields: [electionId], references: [electionId], onDelete: Cascade)
+
+  @@unique([electionId, email])
+  @@index([electionId, authorized])
+}
+
+model AuthTicket {
+  id         String   @id @default(cuid())
+  electionId String
+  ticket     String   @unique
+  voterId    String
+  consumed   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  election   Election @relation(fields: [electionId], references: [electionId], onDelete: Cascade)
+
+  @@index([electionId, voterId])
+}
+
+model Ballot {
+  id              String   @id @default(cuid())
+  electionId      String
+  index           Int
+  ciphertext      Json
+  ballotProof     Json
+  credentialProof Json
+  nullifier       String
+  receiptHash     String   @unique
+  submittedAt     DateTime @default(now())
+  election        Election @relation(fields: [electionId], references: [electionId], onDelete: Cascade)
+
+  @@unique([electionId, nullifier])
+  @@unique([electionId, index])
+  @@index([electionId])
+}
+
+model NamedBallot {
+  id           String   @id @default(cuid())
+  electionId   String
+  voterEmail   String
+  candidateKey String
+  receiptHash  String   @unique
+  submittedAt  DateTime @default(now())
+  election     Election @relation(fields: [electionId], references: [electionId], onDelete: Cascade)
+
+  @@unique([electionId, voterEmail])
+  @@index([electionId])
+}
