@@ -41,8 +41,8 @@ const titleFormSchema = z
     scheduleMode: z.enum(["unlimited", "timed", "duration"]),
     votingStartsAt: z.string().optional(),
     votingEndsAt: z.string().optional(),
-    durationValue: z.coerce.number().optional(),
-    durationUnit: z.enum(["minutes", "hours", "days"]).default("minutes"),
+    durationValue: z.number().optional(),
+    durationUnit: z.enum(["minutes", "hours", "days"]),
   })
   .superRefine((data, ctx) => {
     if (data.scheduleMode === "duration") {
