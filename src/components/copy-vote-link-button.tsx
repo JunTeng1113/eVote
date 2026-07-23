@@ -18,6 +18,7 @@ type CopyVoteLinkButtonProps = {
   size?: "default" | "sm";
   variant?: "default" | "outline" | "secondary" | "ghost";
   label?: string;
+  className?: string;
 };
 
 function shareUrl(electionId: string): string {
@@ -39,6 +40,7 @@ export function CopyVoteLinkButton({
   size = "default",
   variant = "outline",
   label = "複製連結",
+  className,
 }: CopyVoteLinkButtonProps) {
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -74,7 +76,7 @@ export function CopyVoteLinkButton({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" size={size} variant={variant}>
+        <Button type="button" size={size} variant={variant} className={className}>
           {label}
         </Button>
       </DialogTrigger>
