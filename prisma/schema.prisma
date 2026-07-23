@@ -17,6 +17,7 @@ enum ElectionPhase {
 enum VotingMode {
   anonymous
   named
+  open
 }
 
 enum ScheduleMode {
@@ -48,6 +49,7 @@ model Election {
   authTickets  AuthTicket[]
   ballots      Ballot[]
   namedBallots NamedBallot[]
+  guestBallots GuestBallot[]
   managers     ElectionManager[]
 
   @@index([createdAt])
@@ -132,5 +134,18 @@ model NamedBallot {
   election     Election @relation(fields: [electionId], references: [electionId], onDelete: Cascade)
 
   @@unique([electionId, voterEmail])
+  @@index([electionId])
+}
+
+model GuestBallot {
+  id           String   @id @default(cuid())
+  electionId   String
+  ipHash       String
+  candidateKey String
+  receiptHash  String   @unique
+  submittedAt  DateTime @default(now())
+  election     Election @relation(fields: [electionId], references: [electionId], onDelete: Cascade)
+
+  @@unique([electionId, ipHash])
   @@index([electionId])
 }

@@ -14,7 +14,13 @@ import { resolveElectionSchedule } from "@/lib/voting-schedule-server";
 export async function issueAuthTicket(electionId: string, email: string) {
   const election = await requireElection(electionId);
   if (election.votingMode !== "anonymous") {
-    return { ok: false as const, error: "此場為記名投票，無需領取匿名投票憑證" };
+    return {
+      ok: false as const,
+      error:
+        election.votingMode === "open"
+          ? "此場為無須登入投票，無需領取匿名投票憑證"
+          : "此場為記名投票，無需領取匿名投票憑證",
+    };
   }
   const schedule = await resolveElectionSchedule(electionId, election);
   const windowStatus = getVotingWindowStatus(schedule);

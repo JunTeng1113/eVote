@@ -61,6 +61,50 @@ export async function runUniversalAudit(electionId: string) {
     };
   }
 
+  if (election.votingMode === "open") {
+    const guestCount = election.guestBallots.length;
+    const uniqueIps = new Set(election.guestBallots.map((b) => b.ipHash));
+    checks.push({
+      name: "公開連結選票檢查",
+      passed: uniqueIps.size === guestCount,
+      detail: `票數 ${guestCount}／獨立連線 ${uniqueIps.size}`,
+    });
+    if (election.tally) {
+      const recount: Record<string, number> = {};
+      for (const c of election.candidates) {
+        recount[c.id] = 0;
+      }
+      for (const ballot of election.guestBallots) {
+        recount[ballot.candidateId] = (recount[ballot.candidateId] ?? 0) + 1;
+      }
+      const countsMatch = election.candidates.every(
+        (c) => (recount[c.id] ?? 0) === (election.tally?.counts[c.id] ?? 0),
+      );
+      checks.push({
+        name: "計票一致性",
+        passed: countsMatch && election.tally.total === guestCount,
+        detail: countsMatch ? "一致" : "不一致",
+      });
+    } else {
+      checks.push({
+        name: "計票一致性",
+        passed: false,
+        detail: "尚未開票",
+      });
+    }
+    const pendingOk = checks
+      .filter((c) => c.detail !== "尚未開票")
+      .every((c) => c.passed);
+    return {
+      electionId: election.electionId,
+      phase: election.phase,
+      checks,
+      passed: election.tally ? checks.every((c) => c.passed) : pendingOk,
+      individualHint:
+        "此場為無須登入投票，以連線位址雜湊防重複；確認碼可證明有投到。",
+    };
+  }
+
   let ballotOk = 0;
   for (const ballot of election.ballots) {
     const credOk = verifyCredentialProof(
@@ -219,6 +263,21 @@ export async function findReceipt(electionId: string, receiptHash: string) {
     };
   }
 
+  const guestIndex = election.guestBallots.findIndex(
+    (b) => b.receiptHash === receiptHash,
+  );
+  if (guestIndex >= 0) {
+    const guest = election.guestBallots[guestIndex];
+    return {
+      found: true as const,
+      votingMode: election.votingMode,
+      electionId: election.electionId,
+      electionTitle: election.title,
+      bulletinIndex: guestIndex + 1,
+      submittedAt: guest.submittedAt,
+    };
+  }
+
   return { found: false as const };
 }
 
@@ -249,6 +308,20 @@ export async function findReceiptAnywhere(receiptHash: string) {
         electionTitle: election.title,
         bulletinIndex: namedIndex + 1,
         submittedAt: named.submittedAt,
+      };
+    }
+    const guestIndex = election.guestBallots.findIndex(
+      (b) => b.receiptHash === receiptHash,
+    );
+    if (guestIndex >= 0) {
+      const guest = election.guestBallots[guestIndex];
+      return {
+        found: true as const,
+        votingMode: election.votingMode,
+        electionId: election.electionId,
+        electionTitle: election.title,
+        bulletinIndex: guestIndex + 1,
+        submittedAt: guest.submittedAt,
       };
     }
   }

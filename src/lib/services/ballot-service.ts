@@ -5,8 +5,10 @@ import {
 } from "@/lib/crypto/zk-proof";
 import {
   countBallots,
+  findGuestBallotByIpHash,
   requireElection,
   saveBallot,
+  saveGuestBallot,
   saveNamedBallot,
   type SubmittedBallot,
 } from "@/lib/store/election-store";
@@ -34,7 +36,13 @@ export async function submitBallot(
 ) {
   const election = await requireElection(electionId);
   if (election.votingMode !== "anonymous") {
-    return { ok: false as const, error: "此場為記名投票，請使用記名投票流程" };
+    return {
+      ok: false as const,
+      error:
+        election.votingMode === "open"
+          ? "此場為無須登入投票，請使用公開連結投票流程"
+          : "此場為記名投票，請使用記名投票流程",
+    };
   }
   const open = await ensureVotingOpen(electionId, election);
   if (!open.ok) {
@@ -107,7 +115,13 @@ export async function submitNamedBallot(
 ) {
   const election = await requireElection(electionId);
   if (election.votingMode !== "named") {
-    return { ok: false as const, error: "此場為不記名投票" };
+    return {
+      ok: false as const,
+      error:
+        election.votingMode === "open"
+          ? "此場為無須登入投票，請使用公開連結投票流程"
+          : "此場為不記名投票",
+    };
   }
   const open = await ensureVotingOpen(electionId, election);
   if (!open.ok) {
@@ -137,6 +151,78 @@ export async function submitNamedBallot(
       error instanceof Error ? error.message : "偵測到重複投票，已拒絕此次提交";
     return { ok: false as const, error: message };
   }
+
+  return {
+    ok: true as const,
+    receiptHash,
+    electionId: election.electionId,
+  };
+}
+
+export async function getGuestBallotStatus(
+  electionId: string,
+  ipHash: string,
+) {
+  const election = await requireElection(electionId);
+  if (election.votingMode !== "open") {
+    return {
+      ok: false as const,
+      error: "此場不是無須登入投票",
+    };
+  }
+  const schedule = await resolveElectionSchedule(electionId, election);
+  const windowStatus = getVotingWindowStatus(schedule);
+  const existing = await findGuestBallotByIpHash(electionId, ipHash);
+  return {
+    ok: true as const,
+    eligible: true,
+    hasVoted: Boolean(existing),
+    phase: schedule.phase,
+    windowStatus,
+    message: existing
+      ? "此連線位址已投過票"
+      : windowStatus === "open"
+        ? "可以投票"
+        : votingWindowMessage(windowStatus),
+  };
+}
+
+export async function submitGuestBallot(
+  electionId: string,
+  ipHash: string,
+  candidateId: string,
+) {
+  const election = await requireElection(electionId);
+  if (election.votingMode !== "open") {
+    return { ok: false as const, error: "此場不是無須登入投票" };
+  }
+  const open = await ensureVotingOpen(electionId, election);
+  if (!open.ok) {
+    return open;
+  }
+  if (!election.candidates.some((c) => c.id === candidateId)) {
+    return { ok: false as const, error: "請選擇一個選項" };
+  }
+
+  const existing = await findGuestBallotByIpHash(electionId, ipHash);
+  if (existing) {
+    return { ok: false as const, error: "此連線位址已投過票，無法重複投票" };
+  }
+
+  const receiptHash = domainSeparatedHash(
+    "guest-receipt",
+    election.electionId,
+    ipHash,
+    candidateId,
+    crypto.randomUUID(),
+  );
+
+  await saveGuestBallot({
+    electionId,
+    ipHash,
+    candidateId,
+    receiptHash,
+  });
 
   return {
     ok: true as const,

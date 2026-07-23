@@ -60,7 +60,7 @@ export const createElectionSchema = z
   .object({
     title: z.string().min(2, "請輸入投票標題").max(120),
     description: z.string().max(500).optional(),
-    votingMode: z.enum(["anonymous", "named"]).default("anonymous"),
+    votingMode: z.enum(["anonymous", "named", "open"]).default("anonymous"),
     scheduleMode: z
       .enum(["unlimited", "timed", "duration"])
       .default("unlimited"),
@@ -127,6 +127,11 @@ export const createElectionSchema = z
   });
 
 export const namedBallotSubmitSchema = z.object({
+  electionId: z.string().min(1, "缺少投票編號"),
+  candidateId: z.string().min(1, "請選擇一個選項"),
+});
+
+export const guestBallotSubmitSchema = z.object({
   electionId: z.string().min(1, "缺少投票編號"),
   candidateId: z.string().min(1, "請選擇一個選項"),
 });

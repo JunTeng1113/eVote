@@ -37,7 +37,7 @@ const titleFormSchema = z
   .object({
     title: z.string().min(2, "請輸入投票標題"),
     description: z.string().optional(),
-    votingMode: z.enum(["anonymous", "named"]),
+    votingMode: z.enum(["anonymous", "named", "open"]),
     scheduleMode: z.enum(["unlimited", "timed", "duration"]),
     votingStartsAt: z.string().optional(),
     votingEndsAt: z.string().optional(),
@@ -121,7 +121,7 @@ type ElectionSummary = {
   title: string;
   description: string;
   phase: string;
-  votingMode: "anonymous" | "named";
+  votingMode: "anonymous" | "named" | "open";
   scheduleMode: "unlimited" | "timed" | "duration";
   votingStartsAt: string | null;
   votingEndsAt: string | null;
@@ -177,7 +177,13 @@ function phaseText(phase: string): string {
 }
 
 function votingModeText(mode: string): string {
-  return mode === "named" ? "記名" : "不記名";
+  if (mode === "named") {
+    return "記名";
+  }
+  if (mode === "open") {
+    return "無須登入";
+  }
+  return "不記名";
 }
 
 function scheduleModeText(mode: string): string {
@@ -310,6 +316,7 @@ export default function AdminPage() {
     },
   });
   const scheduleMode = titleForm.watch("scheduleMode");
+  const votingMode = titleForm.watch("votingMode");
   const durationValue = titleForm.watch("durationValue");
   const durationUnit = titleForm.watch("durationUnit");
   const resolvedDurationMinutes = durationMinutesFromParts(
@@ -557,7 +564,7 @@ export default function AdminPage() {
                 meta.durationUnit,
               )
             : undefined,
-        voterEmails: voterEmailsDraft,
+        voterEmails: votingMode === "open" ? "" : voterEmailsDraft,
         candidates,
       }),
     });
@@ -923,7 +930,11 @@ export default function AdminPage() {
             <div className="flex flex-wrap gap-2">
               <StepBadge step={1} current={createStep} label="標題與說明" />
               <StepBadge step={2} current={createStep} label="投票選項" />
-              <StepBadge step={3} current={createStep} label="可投票名單" />
+              <StepBadge
+                step={3}
+                current={createStep}
+                label={votingMode === "open" ? "分享連結" : "可投票名單"}
+              />
             </div>
 
             {createStep === 1 ? (
@@ -951,7 +962,7 @@ export default function AdminPage() {
                 </div>
                 <fieldset className="space-y-2">
                   <legend className="text-sm font-medium">投票方式</legend>
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:grid-cols-3">
                     <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-[var(--border)] px-3 py-3 has-[:checked]:border-[var(--primary)] has-[:checked]:bg-[var(--muted)]">
                       <input
                         type="radio"
@@ -964,7 +975,7 @@ export default function AdminPage() {
                           不記名投票
                         </span>
                         <span className="mt-0.5 block text-xs text-[var(--muted-foreground)]">
-                          預設。可確認有投票，但無法得知誰投了什麼。
+                          預設。需登入且在名單內；可確認有投票，但無法得知誰投了什麼。
                         </span>
                       </span>
                     </label>
@@ -980,7 +991,23 @@ export default function AdminPage() {
                           記名投票
                         </span>
                         <span className="mt-0.5 block text-xs text-[var(--muted-foreground)]">
-                          開票後可對照每位選民的選擇。
+                          需登入且在名單內；開票後可對照每位選民的選擇。
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-[var(--border)] px-3 py-3 has-[:checked]:border-[var(--primary)] has-[:checked]:bg-[var(--muted)]">
+                      <input
+                        type="radio"
+                        value="open"
+                        className="mt-1"
+                        {...titleForm.register("votingMode")}
+                      />
+                      <span>
+                        <span className="block text-sm font-medium">
+                          無須登入
+                        </span>
+                        <span className="mt-0.5 block text-xs text-[var(--muted-foreground)]">
+                          僅能透過分享連結投票；以連線位址防重複，不需 Google 登入。
                         </span>
                       </span>
                     </label>
@@ -1350,19 +1377,30 @@ export default function AdminPage() {
                     個
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="voterEmailsDraft">此場可投票 Email</Label>
-                  <textarea
-                    id="voterEmailsDraft"
-                    className="min-h-36 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
-                    placeholder={"alice@gmail.com\nbob@gmail.com"}
-                    value={voterEmailsDraft}
-                    onChange={(event) => setVoterEmailsDraft(event.target.value)}
-                  />
-                  <p className="text-xs text-[var(--muted-foreground)]">
-                    可先空白，建立後再於「查看投票列表」補上。此名單只屬於這一場。
-                  </p>
-                </div>
+                {votingMode === "open" ? (
+                  <Alert>
+                    <p className="font-medium">此場無須登入，也不需可投票名單</p>
+                    <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                      建立後請複製專屬投票連結分享給參與者。系統會記錄連線位址雜湊，同一連線無法重複投票。此場不會出現在一般投票列表。
+                    </p>
+                  </Alert>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="voterEmailsDraft">此場可投票 Email</Label>
+                    <textarea
+                      id="voterEmailsDraft"
+                      className="min-h-36 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
+                      placeholder={"alice@gmail.com\nbob@gmail.com"}
+                      value={voterEmailsDraft}
+                      onChange={(event) =>
+                        setVoterEmailsDraft(event.target.value)
+                      }
+                    />
+                    <p className="text-xs text-[var(--muted-foreground)]">
+                      可先空白，建立後再於「查看投票列表」補上。此名單只屬於這一場。
+                    </p>
+                  </div>
+                )}
                 <div className="flex justify-between gap-2">
                   <Button
                     type="button"
@@ -1429,9 +1467,11 @@ export default function AdminPage() {
                         </div>
                       </div>
                       <div className="mt-1 text-xs text-[var(--muted-foreground)]">
-                        {election.candidates.length} 個選項 · 投票權人數 {" "} {election.stats.eligibleVoters} 人 ·
-                        已投票人數 {" "}
-                        {election.stats.ballotCount} 人
+                        {election.candidates.length} 個選項 ·{" "}
+                        {election.votingMode === "open"
+                          ? "公開連結投票"
+                          : `投票權人數 ${election.stats.eligibleVoters} 人`}{" "}
+                        · 已投票人數 {election.stats.ballotCount} 人
                       </div>
                     </button>
                   ))
@@ -1470,6 +1510,12 @@ export default function AdminPage() {
                   <Button
                     variant={detailTab === "voters" ? "default" : "outline"}
                     onClick={() => setDetailTab("voters")}
+                    disabled={selected.votingMode === "open"}
+                    title={
+                      selected.votingMode === "open"
+                        ? "無須登入投票不使用可投票名單"
+                        : undefined
+                    }
                   >
                     可投票名單
                   </Button>
@@ -1522,6 +1568,11 @@ export default function AdminPage() {
                         </Link>
                       </Button>
                     </div>
+                    {selected.votingMode === "open" ? (
+                      <Alert>
+                        此場為無須登入投票，請透過上方連結分享給參與者。一般投票列表不會顯示此場。
+                      </Alert>
+                    ) : null}
                     <Separator />
                     <div className="space-y-3">
                       <div className="text-sm font-medium">投票選項</div>

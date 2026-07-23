@@ -21,7 +21,7 @@ type ElectionResult = {
   electionId: string;
   title: string;
   phase: string;
-  votingMode: "anonymous" | "named";
+  votingMode: "anonymous" | "named" | "open";
   scheduleMode: "unlimited" | "timed" | "duration";
   scheduleLabel?: string;
   candidates: Array<{
@@ -195,7 +195,11 @@ function ResultsContent() {
           <CardDescription>
             狀態 <Badge>{phaseText(selected.phase)}</Badge> ·{" "}
             <Badge>
-              {selected.votingMode === "named" ? "記名" : "不記名"}
+              {selected.votingMode === "named"
+                ? "記名"
+                : selected.votingMode === "open"
+                  ? "無須登入"
+                  : "不記名"}
             </Badge>{" "}
             ·{" "}
             <Badge>
@@ -218,10 +222,12 @@ function ResultsContent() {
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-lg border border-[var(--border)] px-4 py-3">
               <div className="text-xs text-[var(--muted-foreground)]">
-                投票權人數
+                {selected.votingMode === "open" ? "已投票人數" : "投票權人數"}
               </div>
               <div className="mt-1 text-2xl font-semibold tabular-nums">
-                {eligibleVoters}
+                {selected.votingMode === "open"
+                  ? validVotes
+                  : eligibleVoters}
               </div>
             </div>
             <div className="rounded-lg border border-[var(--border)] px-4 py-3">

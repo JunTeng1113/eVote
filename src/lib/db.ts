@@ -2,7 +2,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 
 /** 變更 schema 後請遞增，避免 dev 熱重載沿用舊 PrismaClient 單例。 */
-const PRISMA_CLIENT_GEN = "schedule-duration-v2";
+const PRISMA_CLIENT_GEN = "guest-open-voting-v1";
 
 const globalForPrisma = globalThis as unknown as {
   __evotePrisma?: PrismaClient;

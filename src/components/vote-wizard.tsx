@@ -41,7 +41,7 @@ type ElectionPublic = {
   title: string;
   description: string;
   phase: string;
-  votingMode: "anonymous" | "named";
+  votingMode: "anonymous" | "named" | "open";
   scheduleMode: "unlimited" | "timed" | "duration";
   votingStartsAt: string | null;
   votingEndsAt: string | null;
@@ -170,14 +170,40 @@ export function VoteWizard({
   const [done, setDone] = useState(false);
   /** 無專屬連結時先顯示列表；選定後只顯示該場投票 */
   const [showList, setShowList] = useState(!presetId);
+  /** 專屬連結載入中（含無須登入場次） */
+  const [linkBootstrapping, setLinkBootstrapping] = useState(Boolean(presetId));
 
   const choiceForm = useForm<ChoiceForm>({
     resolver: zodResolver(voteChoiceSchema),
     defaultValues: { candidateId: "" },
   });
 
+  const isOpenMode = election?.votingMode === "open";
+
+  useEffect(() => {
+    if (!presetId) {
+      setLinkBootstrapping(false);
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      setLinkBootstrapping(true);
+      await selectElection(presetId, alive);
+      if (alive) {
+        setLinkBootstrapping(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presetId]);
+
   useEffect(() => {
     if (status !== "authenticated") {
+      return;
+    }
+    if (presetId) {
       return;
     }
     let alive = true;
@@ -190,22 +216,36 @@ export function VoteWizard({
       if (!alive || !data.elections) {
         return;
       }
-      // 一般列表只顯示自己有投票資格的場次
+      // 一般列表只顯示自己有投票資格的場次（不含無須登入場次）
       const eligibleOptions = data.elections.filter((e) => e.eligible);
       setOptions(eligibleOptions);
-      // 專屬連結：直接進入該場（即使不在可投票名單也要顯示狀態）
-      if (presetId) {
-        setShowList(false);
-        await selectElection(presetId, alive);
-        return;
-      }
       setShowList(true);
     })();
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, presetId]);
+
+  // 專屬連結且需登入場次：登入完成後補載資格狀態
+  useEffect(() => {
+    if (!presetId || status !== "authenticated") {
+      return;
+    }
+    if (!election || election.votingMode === "open") {
+      return;
+    }
+    if (me) {
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      await selectElection(presetId, alive);
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, presetId, election?.votingMode, me]);
 
   async function switchGoogleAccount() {
     const callbackUrl =
@@ -236,27 +276,67 @@ export function VoteWizard({
     setProgress(null);
     choiceForm.reset({ candidateId: "" });
 
-    const [electionRes, meRes] = await Promise.all([
-      fetch(`/api/election?id=${encodeURIComponent(electionId)}`),
-      fetch(
-        `/api/eligibility?electionId=${encodeURIComponent(electionId)}`,
-      ),
-    ]);
+    const electionRes = await fetch(
+      `/api/election?id=${encodeURIComponent(electionId)}`,
+    );
     const electionData = (await electionRes.json()) as ElectionPublic & {
       error?: string;
+      ok?: boolean;
     };
-    const meData = (await meRes.json()) as MeStatus;
     if (!alive) {
       return;
     }
     if (!electionRes.ok) {
       setError(electionData.error ?? "找不到此投票");
       setElection(null);
+      setMe(null);
       return;
     }
     setElection(electionData);
-    setMe(meData);
     setShowList(false);
+
+    if (electionData.votingMode === "open") {
+      const guestRes = await fetch(
+        `/api/ballot/guest?electionId=${encodeURIComponent(electionId)}`,
+      );
+      const guestData = (await guestRes.json()) as MeStatus & {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!alive) {
+        return;
+      }
+      if (!guestRes.ok || guestData.ok === false) {
+        setMe({
+          eligible: false,
+          hasVoted: false,
+          message: guestData.error ?? "無法確認投票狀態",
+        });
+        return;
+      }
+      setMe({
+        eligible: true,
+        hasVoted: Boolean(guestData.hasVoted),
+        phase: guestData.phase,
+        windowStatus: guestData.windowStatus,
+        message: guestData.message,
+      });
+      return;
+    }
+
+    if (status !== "authenticated") {
+      setMe(null);
+      return;
+    }
+
+    const meRes = await fetch(
+      `/api/eligibility?electionId=${encodeURIComponent(electionId)}`,
+    );
+    const meData = (await meRes.json()) as MeStatus;
+    if (!alive) {
+      return;
+    }
+    setMe(meData);
   }
 
   async function onSubmitBallot(values: ChoiceForm) {
@@ -310,6 +390,38 @@ export function VoteWizard({
             ? { ...item, hasVoted: true }
             : item,
         ),
+      );
+      return;
+    }
+
+    if (election.votingMode === "open") {
+      setProgress("正在送出投票…");
+      const submitRes = await fetch("/api/ballot/guest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          electionId: election.electionId,
+          candidateId: values.candidateId,
+        }),
+      });
+      const submitData = (await submitRes.json()) as {
+        ok: boolean;
+        error?: string;
+        receiptHash?: string;
+      };
+      setBusy(false);
+      setProgress(null);
+      if (!submitData.ok || !submitData.receiptHash) {
+        setError(submitData.error ?? "送出失敗，請稍後再試");
+        return;
+      }
+      setReceiptHash(submitData.receiptHash);
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("evote-receipt", submitData.receiptHash);
+      }
+      setDone(true);
+      setMe((prev) =>
+        prev ? { ...prev, hasVoted: true, message: "你已經完成投票" } : prev,
       );
       return;
     }
@@ -448,7 +560,7 @@ export function VoteWizard({
     );
   }
 
-  if (status === "loading") {
+  if (status === "loading" || linkBootstrapping) {
     return (
       <Card>
         <CardContent className="py-10 text-center text-[var(--muted-foreground)]">
@@ -458,7 +570,7 @@ export function VoteWizard({
     );
   }
 
-  if (!session?.user) {
+  if (!session?.user && !isOpenMode) {
     return (
       <Card>
         <CardHeader>
@@ -501,7 +613,9 @@ export function VoteWizard({
           <p className="text-sm text-[var(--muted-foreground)]">
             {election.votingMode === "named"
               ? "此場為記名投票，開票後主辦單位與結果頁可對照你的選擇。"
-              : "為保護投票隱私，確認碼不會顯示你投給誰。"}
+              : election.votingMode === "open"
+                ? "此場無須登入；系統以連線位址防止重複投票，確認碼不會顯示你投給誰。"
+                : "為保護投票隱私，確認碼不會顯示你投給誰。"}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button asChild>
@@ -510,9 +624,11 @@ export function VoteWizard({
             <Button asChild variant="outline">
               <Link href={`/results?id=${election.electionId}`}>開票結果</Link>
             </Button>
-            <Button variant="ghost" onClick={backToList}>
-              回到投票列表
-            </Button>
+            {!isOpenMode ? (
+              <Button variant="ghost" onClick={backToList}>
+                回到投票列表
+              </Button>
+            ) : null}
           </div>
         </CardContent>
       </Card>
@@ -593,18 +709,29 @@ export function VoteWizard({
       {!showList && election && me ? (
         <Card>
           <CardHeader>
-            <div className="mb-2">
-              <Button type="button" variant="ghost" size="sm" onClick={backToList}>
-                ← 返回列表
-              </Button>
-            </div>
+            {!isOpenMode ? (
+              <div className="mb-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={backToList}
+                >
+                  ← 返回列表
+                </Button>
+              </div>
+            ) : null}
             <div className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 items-start">
               <CardTitle className="min-w-0 self-center">
                 {election.title}
               </CardTitle>
               <div className="flex flex-wrap justify-end gap-2 self-center">
                 <Badge>
-                  {election.votingMode === "named" ? "記名投票" : "不記名投票"}
+                  {election.votingMode === "named"
+                    ? "記名投票"
+                    : election.votingMode === "open"
+                      ? "無須登入"
+                      : "不記名投票"}
                 </Badge>
                 <Badge>{scheduleModeBadge(election.scheduleMode)}</Badge>
               </div>
@@ -627,14 +754,18 @@ export function VoteWizard({
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {!me.eligible ? (
+            {isOpenMode && !me.eligible ? (
+              <Alert className="border-amber-300/60 bg-amber-50 text-amber-950">
+                {me.message ?? "目前無法投票，請稍後再試。"}
+              </Alert>
+            ) : !me.eligible && !isOpenMode ? (
               <div className="space-y-3">
                 <Alert className="border-amber-300/60 bg-amber-50 text-amber-950">
                   <p className="font-medium">你沒有權限投票這場</p>
                   <p className="mt-1 text-sm">
                     目前登入帳號{" "}
                     <span className="font-medium">
-                      {session.user.email ?? "（未知）"}
+                      {session?.user?.email ?? "（未知）"}
                     </span>{" "}
                     不在可投票名單中。若你有其他可投票帳號，請切換帳號後再使用此連結。
                   </p>

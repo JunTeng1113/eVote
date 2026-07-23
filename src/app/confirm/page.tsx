@@ -46,7 +46,7 @@ export default function ConfirmPage() {
       bulletinIndex?: number;
       submittedAt?: string;
       electionTitle?: string;
-      votingMode?: "anonymous" | "named";
+      votingMode?: "anonymous" | "named" | "open";
     };
     if (!data.found) {
       setLookup("找不到這組確認碼。請確認是否貼上完整內容。");

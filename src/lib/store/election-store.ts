@@ -19,7 +19,7 @@ import {
 } from "@/generated/prisma/client";
 
 export type ElectionPhase = "voting" | "closed" | "mixing" | "tallied";
-export type VotingMode = "anonymous" | "named";
+export type VotingMode = "anonymous" | "named" | "open";
 export type ScheduleMode = "unlimited" | "timed" | "duration";
 
 export type Candidate = {
@@ -61,6 +61,13 @@ export type NamedBallotRecord = {
   submittedAt: string;
 };
 
+export type GuestBallotRecord = {
+  ipHash: string;
+  candidateId: string;
+  receiptHash: string;
+  submittedAt: string;
+};
+
 export type TallyResult = {
   counts: Record<string, number>;
   total: number;
@@ -96,6 +103,7 @@ export type ElectionState = {
   authTickets: AuthTicketRecord[];
   ballots: SubmittedBallot[];
   namedBallots: NamedBallotRecord[];
+  guestBallots: GuestBallotRecord[];
   nullifiers: string[];
   issuer: ReturnType<typeof generateBlindSignKeys>;
   threshold: {
@@ -155,6 +163,12 @@ type ElectionWithRelations = DbElection & {
   }>;
   namedBallots: Array<{
     voterEmail: string;
+    candidateKey: string;
+    receiptHash: string;
+    submittedAt: Date;
+  }>;
+  guestBallots: Array<{
+    ipHash: string;
     candidateKey: string;
     receiptHash: string;
     submittedAt: Date;
@@ -232,6 +246,12 @@ function mapElection(row: ElectionWithRelations): ElectionState {
       receiptHash: b.receiptHash,
       submittedAt: b.submittedAt.toISOString(),
     })),
+    guestBallots: row.guestBallots.map((b) => ({
+      ipHash: b.ipHash,
+      candidateId: b.candidateKey,
+      receiptHash: b.receiptHash,
+      submittedAt: b.submittedAt.toISOString(),
+    })),
     nullifiers: ballots.map((b) => b.nullifier),
     issuer: asJson(row.issuer),
     threshold: asJson(row.threshold),
@@ -247,6 +267,7 @@ const electionInclude = {
   authTickets: true,
   ballots: true,
   namedBallots: true,
+  guestBallots: true,
   managers: true,
 } as const;
 
@@ -434,7 +455,12 @@ export async function createElection(
       title: input.title.trim(),
       description: input.description?.trim() ?? "",
       phase: "voting",
-      votingMode: input.votingMode === "named" ? "named" : "anonymous",
+      votingMode:
+        input.votingMode === "named"
+          ? "named"
+          : input.votingMode === "open"
+            ? "open"
+            : "anonymous",
       scheduleMode,
       votingStartsAt,
       votingEndsAt,
@@ -443,7 +469,9 @@ export async function createElection(
       issuer: crypto.issuer as unknown as Prisma.InputJsonValue,
       threshold: crypto.threshold as unknown as Prisma.InputJsonValue,
       candidates: { create: candidates },
-      voters: { create: voters },
+      voters: {
+        create: input.votingMode === "open" ? [] : voters,
+      },
       managers: { create: [{ email: creatorEmail }] },
     },
   });
@@ -464,7 +492,11 @@ export async function updateElectionMeta(
   },
 ): Promise<ElectionState> {
   const election = await requireElection(electionId);
-  if (election.ballots.length > 0 || election.namedBallots.length > 0) {
+  if (
+    election.ballots.length > 0 ||
+    election.namedBallots.length > 0 ||
+    election.guestBallots.length > 0
+  ) {
     throw new Error("已有人投票，無法修改選項與基本資料");
   }
   if (election.phase !== "voting") {
@@ -509,7 +541,11 @@ export async function updateCandidateImage(
   imageUrl: string | null,
 ): Promise<ElectionState> {
   const election = await requireElection(electionId);
-  if (election.ballots.length > 0 || election.namedBallots.length > 0) {
+  if (
+    election.ballots.length > 0 ||
+    election.namedBallots.length > 0 ||
+    election.guestBallots.length > 0
+  ) {
     throw new Error("已有人投票，無法再變更選項圖片");
   }
   const result = await prisma.candidate.updateMany({
@@ -548,6 +584,7 @@ export async function resetElection(
     : [];
 
   await prisma.$transaction(async (tx) => {
+    await tx.guestBallot.deleteMany({ where: { electionId } });
     await tx.namedBallot.deleteMany({ where: { electionId } });
     await tx.ballot.deleteMany({ where: { electionId } });
     await tx.authTicket.deleteMany({ where: { electionId } });
@@ -570,7 +607,12 @@ export async function resetElection(
         issuer: crypto.issuer as unknown as Prisma.InputJsonValue,
         threshold: crypto.threshold as unknown as Prisma.InputJsonValue,
         candidates: { create: candidates },
-        voters: { create: voters },
+        voters: {
+          create:
+            previous.votingMode === "open"
+              ? []
+              : voters,
+        },
       },
     });
   });
@@ -846,6 +888,36 @@ export async function saveNamedBallot(input: {
   });
 }
 
+export async function findGuestBallotByIpHash(
+  electionId: string,
+  ipHash: string,
+) {
+  return prisma.guestBallot.findUnique({
+    where: {
+      electionId_ipHash: {
+        electionId,
+        ipHash,
+      },
+    },
+  });
+}
+
+export async function saveGuestBallot(input: {
+  electionId: string;
+  ipHash: string;
+  candidateId: string;
+  receiptHash: string;
+}): Promise<void> {
+  await prisma.guestBallot.create({
+    data: {
+      electionId: input.electionId,
+      ipHash: input.ipHash,
+      candidateKey: input.candidateId,
+      receiptHash: input.receiptHash,
+    },
+  });
+}
+
 export async function countBallots(electionId: string): Promise<number> {
   return prisma.ballot.count({ where: { electionId } });
 }
@@ -857,6 +929,9 @@ export async function countSubmittedVotes(electionId: string): Promise<number> {
   });
   if (election?.votingMode === "named") {
     return prisma.namedBallot.count({ where: { electionId } });
+  }
+  if (election?.votingMode === "open") {
+    return prisma.guestBallot.count({ where: { electionId } });
   }
   return prisma.ballot.count({ where: { electionId } });
 }
@@ -888,7 +963,9 @@ export function publicElectionView(state: ElectionState) {
   const ballotCount =
     state.votingMode === "named"
       ? state.namedBallots.length
-      : state.ballots.length;
+      : state.votingMode === "open"
+        ? state.guestBallots.length
+        : state.ballots.length;
   return {
     electionId: state.electionId,
     title: state.title,
@@ -903,8 +980,12 @@ export function publicElectionView(state: ElectionState) {
     candidates: state.candidates,
     createdAt: state.createdAt,
     stats: {
-      eligibleVoters: state.voters.length,
-      authorizedCount: state.voters.filter((v) => v.authorized).length,
+      eligibleVoters:
+        state.votingMode === "open" ? 0 : state.voters.length,
+      authorizedCount:
+        state.votingMode === "open"
+          ? state.guestBallots.length
+          : state.voters.filter((v) => v.authorized).length,
       ballotCount,
     },
     crypto: {
@@ -932,7 +1013,9 @@ export function electionSummary(state: ElectionState) {
   const ballotCount =
     state.votingMode === "named"
       ? state.namedBallots.length
-      : state.ballots.length;
+      : state.votingMode === "open"
+        ? state.guestBallots.length
+        : state.ballots.length;
   return {
     electionId: state.electionId,
     title: state.title,
@@ -945,7 +1028,8 @@ export function electionSummary(state: ElectionState) {
     createdByEmail: state.createdByEmail,
     managerEmails: state.managerEmails,
     candidateCount: state.candidates.length,
-    eligibleVoters: state.voters.length,
+    eligibleVoters:
+      state.votingMode === "open" ? 0 : state.voters.length,
     ballotCount,
     createdAt: state.createdAt,
     hasResult: Boolean(state.tally),

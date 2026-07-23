@@ -22,7 +22,13 @@ export async function closeVoting(electionId: string) {
     return { ok: false as const, error: "目前階段無法截止投票" };
   }
   await updateElectionPhase(electionId, "closed");
-  return { ok: true as const, ballotCount: election.ballots.length };
+  const ballotCount =
+    election.votingMode === "named"
+      ? election.namedBallots.length
+      : election.votingMode === "open"
+        ? election.guestBallots.length
+        : election.ballots.length;
+  return { ok: true as const, ballotCount };
 }
 
 export async function reopenVoting(electionId: string) {
@@ -41,7 +47,13 @@ export async function reopenVoting(electionId: string) {
     };
   }
   await updateElectionPhase(electionId, "voting");
-  return { ok: true as const, ballotCount: election.ballots.length };
+  const ballotCount =
+    election.votingMode === "named"
+      ? election.namedBallots.length
+      : election.votingMode === "open"
+        ? election.guestBallots.length
+        : election.ballots.length;
+  return { ok: true as const, ballotCount };
 }
 
 export async function runTally(electionId: string) {
@@ -53,28 +65,35 @@ export async function runTally(electionId: string) {
     return { ok: false as const, error: "請先截止投票再開票" };
   }
 
-  if (election.votingMode === "named") {
-    if (election.namedBallots.length === 0) {
+  if (election.votingMode === "named" || election.votingMode === "open") {
+    const ballots =
+      election.votingMode === "named"
+        ? election.namedBallots
+        : election.guestBallots;
+    if (ballots.length === 0) {
       return { ok: false as const, error: "尚無選票可開票" };
     }
     const counts: Record<string, number> = {};
     for (const c of election.candidates) {
       counts[c.id] = 0;
     }
-    for (const ballot of election.namedBallots) {
+    for (const ballot of ballots) {
       counts[ballot.candidateId] = (counts[ballot.candidateId] ?? 0) + 1;
     }
     const tally: TallyResult = {
       counts,
-      total: election.namedBallots.length,
+      total: ballots.length,
       mixLayers: [],
       mixedCiphertexts: [],
       mixProofs: [],
       decryptionProofs: [],
-      namedVotes: election.namedBallots.map((b) => ({
-        email: b.voterEmail,
-        candidateId: b.candidateId,
-      })),
+      namedVotes:
+        election.votingMode === "named"
+          ? election.namedBallots.map((b) => ({
+              email: b.voterEmail,
+              candidateId: b.candidateId,
+            }))
+          : undefined,
       talliedAt: new Date().toISOString(),
     };
     await saveTallyResult(electionId, tally);

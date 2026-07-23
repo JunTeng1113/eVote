@@ -7,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { HomeResultPreviews } from "@/components/home-result-previews";
 
 export default function HomePage() {
   return (
@@ -53,6 +54,8 @@ export default function HomePage() {
           </CardHeader>
         </Card>
       </section>
+
+      <HomeResultPreviews />
 
       <Card>
         <CardHeader>
