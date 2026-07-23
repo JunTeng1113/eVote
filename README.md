@@ -120,7 +120,7 @@ ADMIN_EMAILS=你的管理員@gmail.com
 
 > `prisma migrate deploy` 需要能取得 Postgres advisory lock。若 `DATABASE_URL` 是 Neon `-pooler` 位址，建置可能出現 `P1002` 逾時；請改設 `DIRECT_URL` 為不含 `-pooler` 的直連，或沿用本專案自動轉換。
 
-4. Build Command 使用專案預設：`prisma generate && prisma migrate deploy && next build`  
+4. Build Command 使用專案預設：`prisma generate && node scripts/migrate-deploy.mjs && next build`（遷移失敗會自動重試，以應付 Neon 冷啟動／lock）  
 5. Deploy 完成後取得公開網址
 
 ### 3. 更新 Google OAuth
