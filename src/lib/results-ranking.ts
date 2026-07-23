@@ -81,19 +81,22 @@ export function formatTalliedAt(iso: string): string {
 export type PieChartMode = "all" | "withVotes" | "topN";
 
 export function legendItemsPerColumn(itemCount: number): number {
-  if (itemCount > 100) {
+  if (itemCount > 120) {
+    return 50;
+  }
+  if (itemCount > 75) {
     return 40;
   }
-  if (itemCount > 80) {
+  if (itemCount > 60) {
     return 25;
   }
-  if (itemCount > 60) {
+  if (itemCount > 45) {
     return 20;
   }
-  if (itemCount > 40) {
+  if (itemCount > 30) {
     return 15;
   }
-  if (itemCount > 32) {
+  if (itemCount > 24) {
     return 10;
   }
   return 8;
