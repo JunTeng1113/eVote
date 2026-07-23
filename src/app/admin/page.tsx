@@ -239,13 +239,13 @@ async function uploadImage(file: File): Promise<string> {
     method: "POST",
     body,
   });
-  const data = (await res.json()) as {
+  const data = await readResponseJson<{
     ok: boolean;
     error?: string;
     imageUrl?: string;
-  };
-  if (!data.ok || !data.imageUrl) {
-    throw new Error(data.error ?? "圖片上傳失敗");
+  }>(res);
+  if (!data?.ok || !data.imageUrl) {
+    throw new Error(data?.error ?? "圖片上傳失敗");
   }
   return data.imageUrl;
 }
@@ -584,7 +584,7 @@ export default function AdminPage() {
       typeof window !== "undefined" ? window.location.origin : null,
     );
     toast.success(`已建立「${data.election.title}」`, {
-      description: "可複製投票連結分享給選民",
+      description: "可複製投票連結分享給投票權人",
       action: {
         label: "複製連結",
         onClick: () => {
@@ -739,7 +739,7 @@ export default function AdminPage() {
       toast.error(data.error ?? "移除失敗");
       return;
     }
-    toast.success("已移除選民");
+    toast.success("已移除投票權人");
     await loadElections(selectedId);
   }
 
@@ -749,7 +749,7 @@ export default function AdminPage() {
     }
     if (action === "close") {
       const confirmed = window.confirm(
-        "確定要截止投票嗎？截止後選民將無法再送出選票。",
+        "確定要截止投票嗎？截止後投票權人將無法再送出選票。",
       );
       if (!confirmed) {
         return;
@@ -757,7 +757,7 @@ export default function AdminPage() {
     }
     if (action === "reopen") {
       const confirmed = window.confirm(
-        "確定要恢復投票嗎？恢復後選民可再次送出選票。",
+        "確定要恢復投票嗎？恢復後投票權人可再次送出選票。",
       );
       if (!confirmed) {
         return;
@@ -956,7 +956,7 @@ export default function AdminPage() {
                   <textarea
                     id="description"
                     className="min-h-28 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
-                    placeholder="向選民說明這場投票的目的"
+                    placeholder="向投票權人說明這場投票的目的"
                     {...titleForm.register("description")}
                   />
                 </div>
@@ -991,7 +991,7 @@ export default function AdminPage() {
                           記名投票
                         </span>
                         <span className="mt-0.5 block text-xs text-[var(--muted-foreground)]">
-                          需登入且在名單內；開票後可對照每位選民的選擇。
+                          需登入且在名單內；開票後可對照每位投票權人的選擇。
                         </span>
                       </span>
                     </label>
@@ -1237,13 +1237,13 @@ export default function AdminPage() {
                       <Label htmlFor="bulkCandidatesDraft">整批輸入選項</Label>
                       <p className="mt-1 text-xs text-[var(--muted-foreground)]">
                         每行一個選項。可用 Tab、逗號或｜分隔補充說明，例如：
-                        <span className="font-mono">王小明｜甲黨</span>
+                        <span className="font-mono">王小明｜甲單位</span>
                       </p>
                     </div>
                     <textarea
                       id="bulkCandidatesDraft"
                       className="min-h-36 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 font-mono text-sm"
-                      placeholder={"王小明｜甲黨\n李小華｜乙黨\n陳小美"}
+                      placeholder={"王小明｜甲單位\n李小華｜乙單位\n陳小美"}
                       value={bulkCandidatesDraft}
                       onChange={(event) =>
                         setBulkCandidatesDraft(event.target.value)
@@ -1333,7 +1333,7 @@ export default function AdminPage() {
                           }
                         />
                         <Input
-                          placeholder="補充說明（選填，例如政黨、備註）"
+                          placeholder="補充說明（選填，例如單位、備註）"
                           value={candidate.party}
                           onChange={(event) =>
                             setDraftCandidates((prev) =>

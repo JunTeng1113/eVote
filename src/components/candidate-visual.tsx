@@ -39,7 +39,9 @@ export function CandidateVisual({
       )}
       <span>
         <span className="font-medium">{name}</span>
-        {party.trim() && party.trim() !== "無黨籍" ? (
+        {party.trim() &&
+        party.trim() !== "無黨籍" &&
+        party.trim() !== "無單位" ? (
           <span className="ml-2 text-sm text-[var(--muted-foreground)]">
             {party}
           </span>

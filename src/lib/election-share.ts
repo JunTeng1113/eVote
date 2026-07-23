@@ -1,4 +1,4 @@
-/** 產生供選民使用的專屬投票連結（路徑含 electionId）。 */
+/** 產生供投票權人使用的專屬投票連結（路徑含 electionId）。 */
 export function buildVotePath(electionId: string): string {
   return `/vote/${encodeURIComponent(electionId)}`;
 }

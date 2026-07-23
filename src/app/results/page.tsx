@@ -14,6 +14,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CandidateVisual } from "@/components/candidate-visual";
 import { ResultsPieChart } from "@/components/results-pie-chart";
+import {
+  exportResultsPdfA4,
+  exportResultsPng,
+  type ResultExportInput,
+} from "@/lib/export-results";
 import { readResponseJson } from "@/lib/read-response-json";
 import { toast } from "sonner";
 
@@ -65,12 +70,51 @@ function phaseText(phase: string): string {
   }
 }
 
+function modeLabel(mode: ElectionResult["votingMode"]): string {
+  if (mode === "named") {
+    return "記名";
+  }
+  if (mode === "open") {
+    return "無須登入";
+  }
+  return "不記名";
+}
+
+function buildExportInput(
+  selected: ElectionResult,
+  validVotes: number,
+  eligibleVoters: number,
+  turnout: string,
+): ResultExportInput | null {
+  if (!selected.tallyDetail) {
+    return null;
+  }
+  return {
+    title: selected.title,
+    modeLabel: modeLabel(selected.votingMode),
+    talliedAt: selected.tallyDetail.talliedAt,
+    eligibleLabel:
+      selected.votingMode === "open" ? "已投票人數" : "投票權人數",
+    eligibleCount:
+      selected.votingMode === "open" ? validVotes : eligibleVoters,
+    totalVotes: selected.tallyDetail.total,
+    turnout,
+    items: selected.candidates.map((c) => ({
+      id: c.id,
+      name: c.name,
+      party: c.party,
+      votes: selected.tallyDetail?.counts[c.id] ?? 0,
+    })),
+  };
+}
+
 function ResultsContent() {
   const searchParams = useSearchParams();
   const electionId = searchParams.get("id");
   const [selected, setSelected] = useState<ElectionResult | null>(null);
   const [missing, setMissing] = useState(false);
   const [loading, setLoading] = useState(Boolean(electionId));
+  const [exporting, setExporting] = useState(false);
 
   async function load(id: string) {
     setLoading(true);
@@ -123,6 +167,38 @@ function ResultsContent() {
     };
   }, [electionId]);
 
+  async function runExport(
+    kind: "pdf" | "png16" | "png43",
+    payload: ResultExportInput,
+  ) {
+    setExporting(true);
+    const ok =
+      kind === "pdf"
+        ? await exportResultsPdfA4(payload).then(
+            () => true,
+            () => false,
+          )
+        : await exportResultsPng(
+            payload,
+            kind === "png16" ? "16:9" : "4:3",
+          ).then(
+            () => true,
+            () => false,
+          );
+    setExporting(false);
+    if (!ok) {
+      toast.error("匯出失敗，請稍後再試");
+      return;
+    }
+    toast.success(
+      kind === "pdf"
+        ? "已下載 PDF（A4）"
+        : kind === "png16"
+          ? "已下載 PNG（16:9）"
+          : "已下載 PNG（4:3）",
+    );
+  }
+
   if (!electionId) {
     return (
       <div className="space-y-6">
@@ -172,10 +248,16 @@ function ResultsContent() {
   const validVotes =
     selected.tallyDetail?.total ?? selected.stats.ballotCount ?? 0;
   const turnout = formatTurnout(validVotes, eligibleVoters);
+  const exportInput = buildExportInput(
+    selected,
+    validVotes,
+    eligibleVoters,
+    turnout,
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-[family-name:var(--font-display)] text-3xl font-semibold text-[var(--primary)]">
             開票結果
@@ -184,9 +266,36 @@ function ResultsContent() {
             檢視「{selected.title}」的開票狀態與結果。
           </p>
         </div>
-        <Button variant="outline" onClick={() => void load(electionId)}>
-          重新整理
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {exportInput ? (
+            <>
+              <Button
+                variant="outline"
+                disabled={exporting}
+                onClick={() => void runExport("pdf", exportInput)}
+              >
+                匯出 PDF（A4）
+              </Button>
+              <Button
+                variant="outline"
+                disabled={exporting}
+                onClick={() => void runExport("png16", exportInput)}
+              >
+                匯出 PNG（16:9）
+              </Button>
+              <Button
+                variant="outline"
+                disabled={exporting}
+                onClick={() => void runExport("png43", exportInput)}
+              >
+                匯出 PNG（4:3）
+              </Button>
+            </>
+          ) : null}
+          <Button variant="outline" onClick={() => void load(electionId)}>
+            重新整理
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -194,14 +303,7 @@ function ResultsContent() {
           <CardTitle>{selected.title}</CardTitle>
           <CardDescription>
             狀態 <Badge>{phaseText(selected.phase)}</Badge> ·{" "}
-            <Badge>
-              {selected.votingMode === "named"
-                ? "記名"
-                : selected.votingMode === "open"
-                  ? "無須登入"
-                  : "不記名"}
-            </Badge>{" "}
-            ·{" "}
+            <Badge>{modeLabel(selected.votingMode)}</Badge> ·{" "}
             <Badge>
               {selected.scheduleMode === "timed"
                 ? "計時投票"
@@ -305,7 +407,7 @@ function ResultsContent() {
                     <table className="w-full text-sm">
                       <thead className="bg-[var(--muted)]/60 text-left">
                         <tr>
-                          <th className="px-3 py-2 font-medium">選民</th>
+                          <th className="px-3 py-2 font-medium">投票權人</th>
                           <th className="px-3 py-2 font-medium">選擇</th>
                         </tr>
                       </thead>

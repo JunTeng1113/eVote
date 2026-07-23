@@ -57,7 +57,7 @@ export async function runUniversalAudit(electionId: string) {
       phase: election.phase,
       checks,
       passed: election.tally ? checks.every((c) => c.passed) : pendingOk,
-      individualHint: "此場為記名投票，開票後可對照選民與選項。",
+      individualHint: "此場為記名投票，開票後可對照投票權人與選項。",
     };
   }
 
@@ -229,7 +229,7 @@ export async function runUniversalAudit(electionId: string) {
     phase: election.phase,
     checks,
     passed: election.tally ? strictPassed : pendingOk,
-    individualHint: "選民可用確認碼確認票有被收錄，系統不會顯示投票內容。",
+    individualHint: "投票權人可用確認碼確認票有被收錄，系統不會顯示投票內容。",
   };
 }
 
