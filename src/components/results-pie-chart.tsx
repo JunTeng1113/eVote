@@ -1,20 +1,16 @@
+import {
+  RESULT_PALETTE,
+  preparePieItems,
+  formatPct,
+  type PieChartMode,
+} from "@/lib/results-ranking";
+
 type Slice = {
   id: string;
   label: string;
   value: number;
   color: string;
 };
-
-const PALETTE = [
-  "#0b4f6c",
-  "#1b7a6e",
-  "#d97706",
-  "#4d6470",
-  "#0f766e",
-  "#b45309",
-  "#155e75",
-  "#3f6212",
-];
 
 function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
   const rad = ((angleDeg - 90) * Math.PI) / 180;
@@ -44,20 +40,29 @@ function describeSlice(
 
 export function ResultsPieChart({
   items,
+  mode = "all",
+  topN = 8,
+  showLegend = true,
 }: {
   items: Array<{ id: string; label: string; value: number }>;
+  mode?: PieChartMode;
+  topN?: number;
+  showLegend?: boolean;
 }) {
-  const total = items.reduce((sum, item) => sum + item.value, 0);
+  const prepared = preparePieItems(items, mode, topN);
+  const total = prepared.reduce((sum, item) => sum + item.value, 0);
   if (total <= 0) {
     return (
       <p className="text-sm text-[var(--muted-foreground)]">尚無票數可繪製圖表</p>
     );
   }
 
-  const slices: Slice[] = items.map((item, index) => ({
-    ...item,
-    color: PALETTE[index % PALETTE.length]!,
-  }));
+  const slices: Slice[] = prepared
+    .filter((item) => item.value > 0)
+    .map((item, index) => ({
+      ...item,
+      color: RESULT_PALETTE[index % RESULT_PALETTE.length]!,
+    }));
 
   const size = 220;
   const cx = size / 2;
@@ -76,9 +81,6 @@ export function ResultsPieChart({
         className="shrink-0"
       >
         {slices.map((slice) => {
-          if (slice.value <= 0) {
-            return null;
-          }
           const angle = (slice.value / total) * 360;
           const startAngle = cursor;
           const endAngle = cursor + angle;
@@ -122,24 +124,26 @@ export function ResultsPieChart({
           總票數
         </text>
       </svg>
-      <ul className="w-full space-y-2 text-sm">
-        {slices.map((slice) => {
-          const pct = Math.round((slice.value / total) * 100);
-          return (
-            <li key={slice.id} className="flex items-center gap-2">
-              <span
-                className="inline-block h-3 w-3 shrink-0 rounded-sm"
-                style={{ backgroundColor: slice.color }}
-                aria-hidden
-              />
-              <span className="min-w-0 flex-1 truncate">{slice.label}</span>
-              <span className="shrink-0 text-[var(--muted-foreground)]">
-                {slice.value}（{pct}%）
-              </span>
-            </li>
-          );
-        })}
-      </ul>
+      {showLegend ? (
+        <ul className="w-full space-y-2 text-sm">
+          {slices.map((slice) => {
+            const pct = Math.round((slice.value / total) * 1000) / 10;
+            return (
+              <li key={slice.id} className="flex items-center gap-2">
+                <span
+                  className="inline-block h-3 w-3 shrink-0 rounded-sm"
+                  style={{ backgroundColor: slice.color }}
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1 truncate">{slice.label}</span>
+                <span className="shrink-0 text-[var(--muted-foreground)]">
+                  {slice.value}（{formatPct(pct)}）
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
     </div>
   );
 }

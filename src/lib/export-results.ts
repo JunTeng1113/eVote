@@ -1,4 +1,5 @@
 import { jsPDF } from "jspdf";
+import { RESULT_PALETTE, formatPct } from "@/lib/results-ranking";
 
 export type ResultExportItem = {
   id: string;
@@ -18,16 +19,7 @@ export type ResultExportInput = {
   items: ResultExportItem[];
 };
 
-const PALETTE = [
-  "#0b4f6c",
-  "#1b7a6e",
-  "#d97706",
-  "#4d6470",
-  "#0f766e",
-  "#b45309",
-  "#155e75",
-  "#3f6212",
-];
+const EXPORT_TOP_N = 12;
 
 const FONT =
   '"Microsoft JhengHei", "PingFang TC", "Noto Sans TC", "Segoe UI", sans-serif';
@@ -90,6 +82,38 @@ function roundRect(
   ctx.closePath();
 }
 
+function prepareExportRows(input: ResultExportInput): {
+  rows: Array<ResultExportItem & { isOther?: boolean }>;
+  totalOptions: number;
+} {
+  const sorted = [...input.items].sort((a, b) => {
+    if (b.votes !== a.votes) {
+      return b.votes - a.votes;
+    }
+    return a.name.localeCompare(b.name, "zh-Hant");
+  });
+  const totalOptions = sorted.length;
+  if (sorted.length <= EXPORT_TOP_N) {
+    return { rows: sorted, totalOptions };
+  }
+  const head = sorted.slice(0, EXPORT_TOP_N);
+  const rest = sorted.slice(EXPORT_TOP_N);
+  const otherVotes = rest.reduce((sum, item) => sum + item.votes, 0);
+  return {
+    rows: [
+      ...head,
+      {
+        id: "__other__",
+        name: `其餘合計（${rest.length} 個選項）`,
+        party: "",
+        votes: otherVotes,
+        isOther: true,
+      },
+    ],
+    totalOptions,
+  };
+}
+
 function renderResultsCanvas(
   input: ResultExportInput,
   width: number,
@@ -103,11 +127,11 @@ function renderResultsCanvas(
     return canvas;
   }
 
+  const { rows, totalOptions } = prepareExportRows(input);
   const scale = width / 1920;
   const pad = 72 * scale;
   const total = Math.max(input.totalVotes, 1);
 
-  // Background
   const bg = ctx.createLinearGradient(0, 0, width, height);
   bg.addColorStop(0, "#eef5f7");
   bg.addColorStop(0.45, "#f7fafb");
@@ -115,7 +139,6 @@ function renderResultsCanvas(
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, width, height);
 
-  // Card
   ctx.fillStyle = "rgba(255,255,255,0.92)";
   roundRect(ctx, pad, pad, width - pad * 2, height - pad * 2, 28 * scale);
   ctx.fill();
@@ -134,17 +157,18 @@ function renderResultsCanvas(
   y += 52 * scale;
   ctx.fillStyle = "#0f1c24";
   ctx.font = `600 ${Math.round(36 * scale)}px ${FONT}`;
-  const title = input.title.length > 36 ? `${input.title.slice(0, 36)}…` : input.title;
+  const title =
+    input.title.length > 36 ? `${input.title.slice(0, 36)}…` : input.title;
   ctx.fillText(title, contentLeft, y);
 
   y += 34 * scale;
   ctx.fillStyle = "#4d6470";
   ctx.font = `400 ${Math.round(20 * scale)}px ${FONT}`;
-  ctx.fillText(
-    `${input.modeLabel}  ·  開票時間 ${input.talliedAt}`,
-    contentLeft,
-    y,
-  );
+  const meta =
+    totalOptions > EXPORT_TOP_N
+      ? `${input.modeLabel}  ·  開票時間 ${input.talliedAt}  ·  共 ${totalOptions} 個選項（顯示前 ${EXPORT_TOP_N}）`
+      : `${input.modeLabel}  ·  開票時間 ${input.talliedAt}`;
+  ctx.fillText(meta, contentLeft, y);
 
   y += 48 * scale;
   const statW = (contentWidth - 32 * scale) / 3;
@@ -170,10 +194,12 @@ function renderResultsCanvas(
 
   const portrait = height / width > 1.2;
   const pieR = (portrait ? 160 : 130) * scale;
-  const pieCx = portrait ? contentLeft + contentWidth / 2 : contentLeft + 180 * scale;
+  const pieCx = portrait
+    ? contentLeft + contentWidth / 2
+    : contentLeft + 180 * scale;
   const pieCy = y + pieR + 20 * scale;
   let cursor = 0;
-  input.items.forEach((item, index) => {
+  rows.forEach((item, index) => {
     if (item.votes <= 0) {
       return;
     }
@@ -185,7 +211,7 @@ function renderResultsCanvas(
       pieR,
       cursor,
       cursor + angle,
-      PALETTE[index % PALETTE.length]!,
+      RESULT_PALETTE[index % RESULT_PALETTE.length]!,
     );
     cursor += angle;
   });
@@ -205,18 +231,24 @@ function renderResultsCanvas(
   const listLeft = portrait ? contentLeft : contentLeft + 380 * scale;
   const listWidth = portrait ? contentWidth : contentWidth - 380 * scale;
   let rowY = portrait ? pieCy + pieR + 48 * scale : y;
-  const available =
-    height - pad - 48 * scale - rowY - 24 * scale;
+  const available = height - pad - 48 * scale - rowY - 24 * scale;
   const rowH = Math.min(
     56 * scale,
-    available / Math.max(input.items.length, 1) - 12 * scale,
+    available / Math.max(rows.length, 1) - 12 * scale,
   );
 
-  input.items.forEach((item, index) => {
-    const pct = Math.round((item.votes / total) * 100);
-    const color = PALETTE[index % PALETTE.length]!;
+  rows.forEach((item, index) => {
+    const pct = Math.round((item.votes / total) * 1000) / 10;
+    const color = RESULT_PALETTE[index % RESULT_PALETTE.length]!;
     ctx.fillStyle = color;
-    roundRect(ctx, listLeft, rowY + 8 * scale, 16 * scale, 16 * scale, 4 * scale);
+    roundRect(
+      ctx,
+      listLeft,
+      rowY + 8 * scale,
+      16 * scale,
+      16 * scale,
+      4 * scale,
+    );
     ctx.fill();
 
     ctx.fillStyle = "#0f1c24";
@@ -225,13 +257,14 @@ function renderResultsCanvas(
       item.party.trim().length > 0
         ? `${item.name}（${item.party}）`
         : item.name;
-    ctx.fillText(label, listLeft + 28 * scale, rowY + 22 * scale);
+    const clipped = label.length > 28 ? `${label.slice(0, 28)}…` : label;
+    ctx.fillText(clipped, listLeft + 28 * scale, rowY + 22 * scale);
 
     ctx.fillStyle = "#4d6470";
     ctx.font = `400 ${Math.round(18 * scale)}px ${FONT}`;
     ctx.textAlign = "right";
     ctx.fillText(
-      `${item.votes} 票（${pct}%）`,
+      `${item.votes} 票（${formatPct(pct)}）`,
       listLeft + listWidth,
       rowY + 22 * scale,
     );
@@ -240,14 +273,24 @@ function renderResultsCanvas(
     const barY = rowY + 32 * scale;
     const barH = 10 * scale;
     ctx.fillStyle = "rgba(11,79,108,0.08)";
-    roundRect(ctx, listLeft + 28 * scale, barY, listWidth - 28 * scale, barH, 6 * scale);
+    roundRect(
+      ctx,
+      listLeft + 28 * scale,
+      barY,
+      listWidth - 28 * scale,
+      barH,
+      6 * scale,
+    );
     ctx.fill();
     ctx.fillStyle = "#1b7a6e";
     roundRect(
       ctx,
       listLeft + 28 * scale,
       barY,
-      Math.max(4 * scale, ((listWidth - 28 * scale) * pct) / 100),
+      Math.max(
+        4 * scale,
+        ((listWidth - 28 * scale) * Math.min(pct, 100)) / 100,
+      ),
       barH,
       6 * scale,
     );
@@ -256,7 +299,6 @@ function renderResultsCanvas(
     rowY += rowH + 12 * scale;
   });
 
-  // Footer
   ctx.fillStyle = "#4d6470";
   ctx.font = `400 ${Math.round(16 * scale)}px ${FONT}`;
   ctx.fillText(
@@ -268,8 +310,9 @@ function renderResultsCanvas(
   return canvas;
 }
 
-export async function exportResultsPdfA4(input: ResultExportInput): Promise<void> {
-  // A4 @ 150 DPI
+export async function exportResultsPdfA4(
+  input: ResultExportInput,
+): Promise<void> {
   const width = 1240;
   const height = 1754;
   const canvas = renderResultsCanvas(input, width, height);

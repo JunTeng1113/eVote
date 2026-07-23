@@ -12,14 +12,19 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CandidateVisual } from "@/components/candidate-visual";
-import { ResultsPieChart } from "@/components/results-pie-chart";
+import { ResultsBreakdown } from "@/components/results-breakdown";
 import { ResultsPageSkeleton } from "@/components/loading-skeletons";
+import {
+  ListPagination,
+  LIST_PAGE_SIZE,
+  slicePage,
+} from "@/components/list-pagination";
 import {
   exportResultsPdfA4,
   exportResultsPng,
   type ResultExportInput,
 } from "@/lib/export-results";
+import { formatTalliedAt } from "@/lib/results-ranking";
 import { readResponseJson } from "@/lib/read-response-json";
 import { toast } from "sonner";
 
@@ -93,7 +98,7 @@ function buildExportInput(
   return {
     title: selected.title,
     modeLabel: modeLabel(selected.votingMode),
-    talliedAt: selected.tallyDetail.talliedAt,
+    talliedAt: formatTalliedAt(selected.tallyDetail.talliedAt),
     eligibleLabel:
       selected.votingMode === "open" ? "已投票人數" : "投票權人數",
     eligibleCount:
@@ -116,6 +121,7 @@ function ResultsContent() {
   const [missing, setMissing] = useState(false);
   const [loading, setLoading] = useState(Boolean(electionId));
   const [exporting, setExporting] = useState(false);
+  const [namedPage, setNamedPage] = useState(1);
 
   async function load(id: string) {
     setLoading(true);
@@ -134,6 +140,7 @@ function ResultsContent() {
       return;
     }
     setSelected(data);
+    setNamedPage(1);
   }
 
   useEffect(() => {
@@ -162,6 +169,7 @@ function ResultsContent() {
       }
       setSelected(data);
       setMissing(false);
+      setNamedPage(1);
     })();
     return () => {
       alive = false;
@@ -356,47 +364,13 @@ function ResultsContent() {
           ) : (
             <div className="space-y-6">
               <p className="text-sm text-[var(--muted-foreground)]">
-                開票時間：{selected.tallyDetail.talliedAt}
+                開票時間：{formatTalliedAt(selected.tallyDetail.talliedAt)}
               </p>
-              <ResultsPieChart
-                items={selected.candidates.map((c) => ({
-                  id: c.id,
-                  label: c.name,
-                  value: selected.tallyDetail?.counts[c.id] ?? 0,
-                }))}
+              <ResultsBreakdown
+                candidates={selected.candidates}
+                counts={selected.tallyDetail.counts}
+                total={selected.tallyDetail.total}
               />
-              <div className="space-y-4">
-                {selected.candidates.map((c) => {
-                  const count = selected.tallyDetail?.counts[c.id] ?? 0;
-                  const pct =
-                    selected.tallyDetail && selected.tallyDetail.total > 0
-                      ? Math.round(
-                          (count / selected.tallyDetail.total) * 100,
-                        )
-                      : 0;
-                  return (
-                    <div key={c.id} className="space-y-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <CandidateVisual
-                          name={c.name}
-                          party={c.party}
-                          imageUrl={c.imageUrl}
-                          imageClassName="h-10 w-10"
-                        />
-                        <span className="text-sm whitespace-nowrap">
-                          {count} 票（{pct}%）
-                        </span>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-[var(--muted)]">
-                        <div
-                          className="h-full rounded-full bg-[var(--secondary)]"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
               {selected.votingMode === "named" &&
               selected.tallyDetail.namedVotes &&
               selected.tallyDetail.namedVotes.length > 0 ? (
@@ -411,7 +385,11 @@ function ResultsContent() {
                         </tr>
                       </thead>
                       <tbody>
-                        {selected.tallyDetail.namedVotes.map((vote) => {
+                        {slicePage(
+                          selected.tallyDetail.namedVotes,
+                          namedPage,
+                          LIST_PAGE_SIZE,
+                        ).map((vote) => {
                           const option = selected.candidates.find(
                             (c) => c.id === vote.candidateId,
                           );
@@ -430,6 +408,12 @@ function ResultsContent() {
                       </tbody>
                     </table>
                   </div>
+                  <ListPagination
+                    page={namedPage}
+                    totalItems={selected.tallyDetail.namedVotes.length}
+                    pageSize={LIST_PAGE_SIZE}
+                    onPageChange={setNamedPage}
+                  />
                 </div>
               ) : null}
             </div>
