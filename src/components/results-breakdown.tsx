@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  RESULT_PALETTE,
   formatPct,
   rankResults,
   type RankedResultItem,
@@ -76,80 +75,31 @@ function BarRow({
   );
 }
 
-function TopHorizontalBars({
-  items,
-  total,
-}: {
-  items: RankedResultItem[];
-  total: number;
-}) {
-  const top = items.slice(0, 10);
-  const maxVotes = Math.max(...top.map((i) => i.votes), 1);
-  return (
-    <div className="space-y-3">
-      <h3 className="text-sm font-medium">前 10 名得票</h3>
-      <div className="space-y-2.5">
-        {top.map((item, index) => {
-          const widthPct = (item.votes / maxVotes) * 100;
-          const color = RESULT_PALETTE[index % RESULT_PALETTE.length]!;
-          return (
-            <div key={item.id} className="grid grid-cols-[2.5rem_1fr_5.5rem] items-center gap-2 text-sm">
-              <span className="tabular-nums text-[var(--muted-foreground)]">
-                #{item.rank}
-              </span>
-              <div className="min-w-0">
-                <div className="mb-1 truncate font-medium">{item.name}</div>
-                <div className="h-2 overflow-hidden rounded-full bg-[var(--muted)]">
-                  <div
-                    className="h-full rounded-full"
-                    style={{ width: `${widthPct}%`, backgroundColor: color }}
-                  />
-                </div>
-              </div>
-              <span className="text-right tabular-nums text-[var(--muted-foreground)]">
-                {item.votes}（{formatPct(item.pct)}）
-              </span>
-            </div>
-          );
-        })}
-      </div>
-      {total > 0 && top[0] ? (
-        <p className="text-xs text-[var(--muted-foreground)]">
-          長條相對最高得票者比例；百分比以總票數計算。
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function WinnerSummary({ ranked }: { ranked: RankedResultItem[] }) {
+function HighestVoteSummary({ ranked }: { ranked: RankedResultItem[] }) {
   const leaders = ranked.filter((r) => r.rank === 1 && r.votes > 0);
   if (leaders.length === 0) {
     return null;
   }
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--muted)]/40 px-4 py-3">
-      <div className="text-xs text-[var(--muted-foreground)]">目前領先</div>
-      <div className="mt-1 flex flex-wrap items-center gap-2">
-        {leaders.length === 1 ? (
-          <>
-            <span className="font-semibold">{leaders[0]!.name}</span>
-            <Badge>第 1 名</Badge>
-            <span className="text-sm text-[var(--muted-foreground)]">
-              {leaders[0]!.votes} 票（{formatPct(leaders[0]!.pct)}）
-            </span>
-          </>
-        ) : (
-          <>
-            <Badge>第 1 名並列</Badge>
-            <span className="text-sm">
-              {leaders.map((l) => l.name).join("、")}
-            </span>
-            <span className="text-sm text-[var(--muted-foreground)]">
-              各 {leaders[0]!.votes} 票（{formatPct(leaders[0]!.pct)}）
-            </span>
-          </>
-        )}
+      <div className="text-xs text-[var(--muted-foreground)]">最高票</div>
+      <div className="mt-2 space-y-3">
+        {leaders.map((leader) => (
+          <div key={leader.id} className="space-y-0.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold">{leader.name}</span>
+              {leaders.length > 1 ? <Badge>並列</Badge> : null}
+            </div>
+            {leader.party.trim() ? (
+              <div className="text-sm text-[var(--muted-foreground)]">
+                {leader.party}
+              </div>
+            ) : null}
+            <div className="text-sm text-[var(--muted-foreground)]">
+              {leader.votes} 票（{formatPct(leader.pct)}）
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -182,10 +132,7 @@ function RankTable({
           </thead>
           <tbody>
             {pageItems.map((item) => (
-              <tr
-                key={item.id}
-                className="border-t border-[var(--border)]"
-              >
+              <tr key={item.id} className="border-t border-[var(--border)]">
                 <td className="px-3 py-2 tabular-nums text-[var(--muted-foreground)]">
                   #{item.rank}
                 </td>
@@ -244,7 +191,8 @@ export function ResultsBreakdown({
   if (n <= 8) {
     return (
       <div className="space-y-6">
-        <ResultsPieChart items={pieItems} mode="all" />
+        <HighestVoteSummary ranked={ranked} />
+        <ResultsPieChart items={pieItems} mode="all" includeZeroInLegend />
         <div className="space-y-4">
           {ranked.map((item) => (
             <BarRow key={item.id} item={item} total={total} />
@@ -258,7 +206,12 @@ export function ResultsBreakdown({
     const pageItems = slicePage(ranked, page, LIST_PAGE_SIZE);
     return (
       <div className="space-y-6">
-        <ResultsPieChart items={pieItems} mode="withVotes" topN={8} />
+        <HighestVoteSummary ranked={ranked} />
+        <ResultsPieChart
+          items={pieItems}
+          mode="all"
+          includeZeroInLegend
+        />
         <div className="space-y-4">
           {pageItems.map((item) => (
             <BarRow key={item.id} item={item} total={total} compact />
@@ -274,7 +227,7 @@ export function ResultsBreakdown({
     );
   }
 
-  // 21–150
+  // 21–150：保留圓餅圖＋分欄圖例，移除前 10 名橫條
   const filtered = ranked.filter((item) => {
     if (!showZero && item.votes === 0) {
       return false;
@@ -291,8 +244,8 @@ export function ResultsBreakdown({
 
   return (
     <div className="space-y-6">
-      <WinnerSummary ranked={ranked} />
-      <TopHorizontalBars items={ranked} total={total} />
+      <HighestVoteSummary ranked={ranked} />
+      <ResultsPieChart items={pieItems} mode="all" includeZeroInLegend />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Input
           value={query}

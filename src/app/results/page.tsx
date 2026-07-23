@@ -22,6 +22,8 @@ import {
 import {
   exportResultsPdfA4,
   exportResultsPng,
+  type PdfOrientation,
+  type PngExportRatio,
   type ResultExportInput,
 } from "@/lib/export-results";
 import { formatTalliedAt } from "@/lib/results-ranking";
@@ -177,19 +179,44 @@ function ResultsContent() {
   }, [electionId]);
 
   async function runExport(
-    kind: "pdf" | "png16" | "png43",
+    kind:
+      | "pdf"
+      | "pdf-landscape"
+      | "png16"
+      | "png43"
+      | "png916"
+      | "png34",
     payload: ResultExportInput,
   ) {
     setExporting(true);
+    const labels: Record<typeof kind, string> = {
+      pdf: "PDF（A4 直向）",
+      "pdf-landscape": "PDF（A4 橫向）",
+      png16: "PNG（16:9）",
+      png43: "PNG（4:3）",
+      png916: "PNG（9:16）",
+      png34: "PNG（3:4）",
+    };
     const ok =
-      kind === "pdf"
-        ? await exportResultsPdfA4(payload).then(
+      kind === "pdf" || kind === "pdf-landscape"
+        ? await exportResultsPdfA4(
+            payload,
+            (kind === "pdf-landscape"
+              ? "landscape"
+              : "portrait") satisfies PdfOrientation,
+          ).then(
             () => true,
             () => false,
           )
         : await exportResultsPng(
             payload,
-            kind === "png16" ? "16:9" : "4:3",
+            (kind === "png16"
+              ? "16:9"
+              : kind === "png43"
+                ? "4:3"
+                : kind === "png916"
+                  ? "9:16"
+                  : "3:4") satisfies PngExportRatio,
           ).then(
             () => true,
             () => false,
@@ -199,13 +226,7 @@ function ResultsContent() {
       toast.error("匯出失敗，請稍後再試");
       return;
     }
-    toast.success(
-      kind === "pdf"
-        ? "已下載 PDF（A4）"
-        : kind === "png16"
-          ? "已下載 PNG（16:9）"
-          : "已下載 PNG（4:3）",
-    );
+    toast.success(`已下載 ${labels[kind]}`);
   }
 
   if (!electionId) {
@@ -281,7 +302,14 @@ function ResultsContent() {
                 disabled={exporting}
                 onClick={() => void runExport("pdf", exportInput)}
               >
-                匯出 PDF（A4）
+                匯出 PDF（A4 直向）
+              </Button>
+              <Button
+                variant="outline"
+                disabled={exporting}
+                onClick={() => void runExport("pdf-landscape", exportInput)}
+              >
+                匯出 PDF（A4 橫向）
               </Button>
               <Button
                 variant="outline"
@@ -296,6 +324,20 @@ function ResultsContent() {
                 onClick={() => void runExport("png43", exportInput)}
               >
                 匯出 PNG（4:3）
+              </Button>
+              <Button
+                variant="outline"
+                disabled={exporting}
+                onClick={() => void runExport("png916", exportInput)}
+              >
+                匯出 PNG（9:16）
+              </Button>
+              <Button
+                variant="outline"
+                disabled={exporting}
+                onClick={() => void runExport("png34", exportInput)}
+              >
+                匯出 PNG（3:4）
               </Button>
             </>
           ) : null}

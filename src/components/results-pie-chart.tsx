@@ -2,6 +2,7 @@ import {
   RESULT_PALETTE,
   preparePieItems,
   formatPct,
+  legendItemsPerColumn,
   type PieChartMode,
 } from "@/lib/results-ranking";
 
@@ -43,11 +44,14 @@ export function ResultsPieChart({
   mode = "all",
   topN = 8,
   showLegend = true,
+  /** 圖例額外顯示 0 票選項（圓餅仍只畫有票切片） */
+  includeZeroInLegend = false,
 }: {
   items: Array<{ id: string; label: string; value: number }>;
   mode?: PieChartMode;
   topN?: number;
   showLegend?: boolean;
+  includeZeroInLegend?: boolean;
 }) {
   const prepared = preparePieItems(items, mode, topN);
   const total = prepared.reduce((sum, item) => sum + item.value, 0);
@@ -57,12 +61,35 @@ export function ResultsPieChart({
     );
   }
 
-  const slices: Slice[] = prepared
+  const colorById = new Map<string, string>();
+  let colorIndex = 0;
+  for (const item of prepared) {
+    if (item.value <= 0) {
+      continue;
+    }
+    colorById.set(
+      item.id,
+      RESULT_PALETTE[colorIndex % RESULT_PALETTE.length]!,
+    );
+    colorIndex += 1;
+  }
+
+  const pieSlices: Slice[] = prepared
     .filter((item) => item.value > 0)
-    .map((item, index) => ({
+    .map((item) => ({
       ...item,
-      color: RESULT_PALETTE[index % RESULT_PALETTE.length]!,
+      color: colorById.get(item.id) ?? RESULT_PALETTE[0]!,
     }));
+
+  const legendItems: Slice[] = (
+    includeZeroInLegend ? prepared : prepared.filter((item) => item.value > 0)
+  ).map((item) => ({
+    ...item,
+    color:
+      item.value > 0
+        ? (colorById.get(item.id) ?? RESULT_PALETTE[0]!)
+        : "rgba(77,100,112,0.35)",
+  }));
 
   const size = 220;
   const cx = size / 2;
@@ -70,8 +97,11 @@ export function ResultsPieChart({
   const r = 96;
   let cursor = 0;
 
+  const perColumn = legendItemsPerColumn(legendItems.length);
+  const columnCount = Math.max(1, Math.ceil(legendItems.length / perColumn));
+
   return (
-    <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+    <div className="flex flex-col items-center gap-4 lg:flex-row lg:items-start">
       <svg
         width={size}
         height={size}
@@ -80,7 +110,7 @@ export function ResultsPieChart({
         aria-label="投票結果圓餅圖"
         className="shrink-0"
       >
-        {slices.map((slice) => {
+        {pieSlices.map((slice) => {
           const angle = (slice.value / total) * 360;
           const startAngle = cursor;
           const endAngle = cursor + angle;
@@ -125,11 +155,19 @@ export function ResultsPieChart({
         </text>
       </svg>
       {showLegend ? (
-        <ul className="w-full space-y-2 text-sm">
-          {slices.map((slice) => {
+        <ul
+          className="w-full gap-x-4 gap-y-2 text-sm"
+          style={{
+            display: "grid",
+            gridAutoFlow: "column",
+            gridTemplateRows: `repeat(${perColumn}, minmax(0, auto))`,
+            gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
+          }}
+        >
+          {legendItems.map((slice) => {
             const pct = Math.round((slice.value / total) * 1000) / 10;
             return (
-              <li key={slice.id} className="flex items-center gap-2">
+              <li key={slice.id} className="flex min-w-0 items-center gap-2">
                 <span
                   className="inline-block h-3 w-3 shrink-0 rounded-sm"
                   style={{ backgroundColor: slice.color }}
