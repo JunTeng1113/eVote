@@ -6,7 +6,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -22,6 +21,11 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { CandidateVisual } from "@/components/candidate-visual";
 import { ElectionProjectionView } from "@/components/election-projection-view";
+import { ProjectionFullscreenRoot } from "@/components/projection-fullscreen-root";
+import {
+  ResultsProjectionView,
+  type ResultsProjectionInput,
+} from "@/components/results-projection-view";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -34,6 +38,7 @@ import {
 } from "@/lib/voting-schedule";
 import { buildVoteShareUrl } from "@/lib/election-share";
 import { readResponseJson } from "@/lib/read-response-json";
+import { calcPct, formatPct, formatTalliedAt } from "@/lib/results-ranking";
 import { CopyVoteLinkButton } from "@/components/copy-vote-link-button";
 import { useConfirmDialog } from "@/components/confirm-dialog";
 import { AdminPageSkeleton } from "@/components/loading-skeletons";
@@ -308,7 +313,6 @@ function StepBadge({
 }
 
 export default function AdminPage() {
-  const router = useRouter();
   const { data: session, status } = useSession();
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const [ready, setReady] = useState(false);
@@ -317,6 +321,8 @@ export default function AdminPage() {
   const [createStep, setCreateStep] = useState<CreateStep>(1);
   const [detailTab, setDetailTab] = useState<DetailTab>("overview");
   const [projectionOpen, setProjectionOpen] = useState(false);
+  const [projectionResult, setProjectionResult] =
+    useState<ResultsProjectionInput | null>(null);
 
   const [elections, setElections] = useState<ElectionSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -882,6 +888,55 @@ export default function AdminPage() {
     toast.success(messages[action]);
     await loadElections(selectedId);
     return true;
+  }
+
+  function closeProjection() {
+    setProjectionOpen(false);
+    setProjectionResult(null);
+  }
+
+  async function loadProjectionResult(
+    electionId: string,
+  ): Promise<ResultsProjectionInput | null> {
+    const res = await fetch(
+      `/api/tally?electionId=${encodeURIComponent(electionId)}`,
+    );
+    const data = await readResponseJson<{
+      title?: string;
+      votingMode?: string;
+      candidates?: Array<{
+        id: string;
+        name: string;
+        party: string;
+        imageUrl: string | null;
+      }>;
+      stats?: { eligibleVoters?: number; ballotCount?: number };
+      tallyDetail?: {
+        counts: Record<string, number>;
+        total: number;
+        talliedAt: string;
+      } | null;
+    }>(res);
+    if (!data?.tallyDetail || !data.title || !data.candidates) {
+      return null;
+    }
+    const eligibleVoters = data.stats?.eligibleVoters ?? 0;
+    const validVotes = data.tallyDetail.total;
+    const mode = data.votingMode ?? "anonymous";
+    return {
+      title: data.title,
+      modeLabel: votingModeLabel(mode),
+      talliedAt: formatTalliedAt(data.tallyDetail.talliedAt),
+      eligibleLabel: requiresEligibleList(mode) ? "投票權人數" : "已投票人數",
+      eligibleCount: requiresEligibleList(mode) ? eligibleVoters : validVotes,
+      totalVotes: validVotes,
+      turnout:
+        eligibleVoters > 0
+          ? formatPct(calcPct(validVotes, eligibleVoters))
+          : "—",
+      candidates: data.candidates,
+      counts: data.tallyDetail.counts,
+    };
   }
 
   async function onReset() {
@@ -2259,42 +2314,57 @@ export default function AdminPage() {
       ) : null}
 
       {projectionOpen && selected ? (
-        <ElectionProjectionView
-          election={{
-            electionId: selected.electionId,
-            title: selected.title,
-            description: selected.description,
-            phase: selected.phase,
-            scheduleMode: selected.scheduleMode,
-            votingEndsAt: selected.votingEndsAt,
-            scheduleLabel: selected.scheduleLabel,
-            candidates: selected.candidates ?? [],
-            ballotCount: selected.stats.ballotCount,
-          }}
-          busy={busy}
-          onClose={() => setProjectionOpen(false)}
-          onCloseVoting={() => {
-            void runAction("close");
-          }}
-          onTally={() => {
-            void (async () => {
-              const ok = await runAction("tally");
-              if (!ok) {
-                return;
-              }
-              setProjectionOpen(false);
-              router.push(
-                `/results?id=${encodeURIComponent(selected.electionId)}&projection=1`,
-              );
-            })();
-          }}
-          onViewResults={() => {
-            setProjectionOpen(false);
-            router.push(
-              `/results?id=${encodeURIComponent(selected.electionId)}&projection=1`,
-            );
-          }}
-        />
+        <ProjectionFullscreenRoot onClose={closeProjection}>
+          {projectionResult ? (
+            <ResultsProjectionView
+              result={projectionResult}
+              onClose={closeProjection}
+            />
+          ) : (
+            <ElectionProjectionView
+              election={{
+                electionId: selected.electionId,
+                title: selected.title,
+                description: selected.description,
+                phase: selected.phase,
+                scheduleMode: selected.scheduleMode,
+                votingEndsAt: selected.votingEndsAt,
+                scheduleLabel: selected.scheduleLabel,
+                candidates: selected.candidates ?? [],
+                ballotCount: selected.stats.ballotCount,
+              }}
+              busy={busy}
+              onClose={closeProjection}
+              onCloseVoting={() => {
+                void runAction("close");
+              }}
+              onTally={() => {
+                void (async () => {
+                  const ok = await runAction("tally");
+                  if (!ok) {
+                    return;
+                  }
+                  const result = await loadProjectionResult(selected.electionId);
+                  if (!result) {
+                    toast.error("開票完成，但無法載入結果投影");
+                    return;
+                  }
+                  setProjectionResult(result);
+                })();
+              }}
+              onViewResults={() => {
+                void (async () => {
+                  const result = await loadProjectionResult(selected.electionId);
+                  if (!result) {
+                    toast.error("尚無法載入結果投影");
+                    return;
+                  }
+                  setProjectionResult(result);
+                })();
+              }}
+            />
+          )}
+        </ProjectionFullscreenRoot>
       ) : null}
       {confirmDialog}
     </div>

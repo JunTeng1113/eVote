@@ -29,6 +29,7 @@ import {
 import { calcPct, formatPct, formatTalliedAt } from "@/lib/results-ranking";
 import { readResponseJson } from "@/lib/read-response-json";
 import { ResultsProjectionView } from "@/components/results-projection-view";
+import { ProjectionFullscreenRoot } from "@/components/projection-fullscreen-root";
 import { toast } from "sonner";
 import {
   isNamedBallotMode,
@@ -490,22 +491,7 @@ function ResultsContent() {
       </Card>
 
       {projectionOpen && selected.tallyDetail ? (
-        <ResultsProjectionView
-          result={{
-            title: selected.title,
-            modeLabel: modeLabel(selected.votingMode),
-            talliedAt: formatTalliedAt(selected.tallyDetail.talliedAt),
-            eligibleLabel: requiresEligibleList(selected.votingMode)
-              ? "投票權人數"
-              : "已投票人數",
-            eligibleCount: requiresEligibleList(selected.votingMode)
-              ? eligibleVoters
-              : validVotes,
-            totalVotes: selected.tallyDetail.total,
-            turnout,
-            candidates: selected.candidates,
-            counts: selected.tallyDetail.counts,
-          }}
+        <ProjectionFullscreenRoot
           onClose={() => {
             setProjectionOpen(false);
             if (openProjectionParam && electionId) {
@@ -514,7 +500,33 @@ function ResultsContent() {
               );
             }
           }}
-        />
+        >
+          <ResultsProjectionView
+            result={{
+              title: selected.title,
+              modeLabel: modeLabel(selected.votingMode),
+              talliedAt: formatTalliedAt(selected.tallyDetail.talliedAt),
+              eligibleLabel: requiresEligibleList(selected.votingMode)
+                ? "投票權人數"
+                : "已投票人數",
+              eligibleCount: requiresEligibleList(selected.votingMode)
+                ? eligibleVoters
+                : validVotes,
+              totalVotes: selected.tallyDetail.total,
+              turnout,
+              candidates: selected.candidates,
+              counts: selected.tallyDetail.counts,
+            }}
+            onClose={() => {
+              setProjectionOpen(false);
+              if (openProjectionParam && electionId) {
+                router.replace(
+                  `/results?id=${encodeURIComponent(electionId)}`,
+                );
+              }
+            }}
+          />
+        </ProjectionFullscreenRoot>
       ) : null}
     </div>
   );

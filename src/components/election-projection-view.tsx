@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
+import { ProjectionBgmButton } from "@/components/projection-bgm-button";
 import { buildVoteShareUrl } from "@/lib/election-share";
 
 export type ProjectionElection = {
@@ -116,7 +117,7 @@ function useReveal(resetKey: string, delayMs = 80) {
 function VotingWaveBackdrop() {
   return (
     <div
-      className="evote-voting-wave-bob pointer-events-none absolute inset-x-[-20%] top-1/2 h-28 -translate-y-1/2 overflow-hidden opacity-70 sm:h-36"
+      className="evote-voting-wave-bob pointer-events-none absolute inset-x-[-20%] top-[62%] h-28 -translate-y-1/2 overflow-hidden opacity-70 sm:h-36"
       aria-hidden
     >
       <div className="evote-voting-wave-track absolute inset-y-0 left-0 flex w-[200%]">
@@ -196,9 +197,6 @@ export function ElectionProjectionView({
   onTally: () => void;
   onViewResults: () => void;
 }) {
-  const rootRef = useRef<HTMLDivElement>(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
   const showCountdown =
     (election.scheduleMode === "timed" ||
       election.scheduleMode === "duration") &&
@@ -225,52 +223,19 @@ export function ElectionProjectionView({
     );
   }, [election.electionId]);
 
-  useEffect(() => {
-    const node = rootRef.current;
-    if (node && typeof node.requestFullscreen === "function") {
-      void node.requestFullscreen().then(
-        () => undefined,
-        () => undefined,
-      );
-    }
-
-    function onFullscreenChange() {
-      if (!document.fullscreenElement) {
-        onCloseRef.current();
-      }
-    }
-    document.addEventListener("fullscreenchange", onFullscreenChange);
-    return () => {
-      document.removeEventListener("fullscreenchange", onFullscreenChange);
-      if (
-        document.fullscreenElement &&
-        typeof document.exitFullscreen === "function"
-      ) {
-        void document.exitFullscreen().then(
-          () => undefined,
-          () => undefined,
-        );
-      }
-    };
-  }, []);
-
   return (
-    <div
-      ref={rootRef}
-      className="fixed inset-0 z-[80] flex flex-col overflow-auto bg-[#f3f7f8] text-[#0f1c24]"
-      style={{
-        background:
-          "radial-gradient(1200px 600px at 10% -10%, rgba(27, 122, 110, 0.16), transparent 55%), radial-gradient(900px 500px at 90% 0%, rgba(11, 79, 108, 0.14), transparent 50%), linear-gradient(180deg, #eef5f7 0%, #f7fafb 45%, #e8f1f3 100%)",
-      }}
-    >
+    <div className="flex min-h-full flex-1 flex-col">
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-6 py-6 sm:px-10 sm:py-8">
         <div className="flex items-center justify-between gap-4">
           <p className="text-sm font-medium tracking-wide text-[#0b4f6c]">
             eVote 現場投影
           </p>
-          <Button type="button" variant="outline" onClick={onClose}>
-            結束全螢幕
-          </Button>
+          <div className="flex items-center gap-2">
+            <ProjectionBgmButton />
+            <Button type="button" variant="outline" onClick={onClose}>
+              結束全螢幕
+            </Button>
+          </div>
         </div>
 
         <header
