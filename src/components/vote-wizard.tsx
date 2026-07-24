@@ -820,6 +820,8 @@ export function VoteWizard({
               <div className="justify-self-end self-end">
                 <CopyVoteLinkButton
                   electionId={election.electionId}
+                  title={election.title}
+                  votingEndsAt={election.votingEndsAt}
                   variant="outline"
                   size="sm"
                 />

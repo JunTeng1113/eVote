@@ -36,7 +36,7 @@ import {
   MAX_DURATION_MINUTES,
   MIN_DURATION_MINUTES,
 } from "@/lib/voting-schedule";
-import { buildVoteShareUrl } from "@/lib/election-share";
+import { buildVoteShareMessage, buildVoteShareUrl } from "@/lib/election-share";
 import { readResponseJson } from "@/lib/read-response-json";
 import { calcPct, formatPct, formatTalliedAt } from "@/lib/results-ranking";
 import { CopyVoteLinkButton } from "@/components/copy-vote-link-button";
@@ -666,13 +666,18 @@ export default function AdminPage() {
       data.election.electionId,
       typeof window !== "undefined" ? window.location.origin : null,
     );
+    const shareMessage = buildVoteShareMessage({
+      title: data.election.title,
+      url: shareUrl,
+      votingEndsAt: data.election.votingEndsAt,
+    });
     toast.success(`已建立「${data.election.title}」`, {
-      description: "可複製投票連結分享給投票權人",
+      description: "可複製投票訊息分享給投票權人",
       action: {
-        label: "複製連結",
+        label: "複製訊息",
         onClick: () => {
-          void navigator.clipboard.writeText(shareUrl).then(() => {
-            toast.success("已複製投票連結");
+          void navigator.clipboard.writeText(shareMessage).then(() => {
+            toast.success("已複製投票訊息與連結");
           });
         },
       },
@@ -1991,6 +1996,8 @@ export default function AdminPage() {
                           <div className="flex flex-wrap items-center gap-2">
                             <CopyVoteLinkButton
                               electionId={selected.electionId}
+                              title={selected.title}
+                              votingEndsAt={selected.votingEndsAt}
                               variant="outline"
                               iconOnly
                             />

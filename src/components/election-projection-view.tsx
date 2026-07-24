@@ -5,6 +5,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import { ProjectionBgmButton } from "@/components/projection-bgm-button";
 import { buildVoteShareUrl } from "@/lib/election-share";
+import { readResponseJson } from "@/lib/read-response-json";
 
 export type ProjectionElection = {
   electionId: string;
@@ -117,63 +118,63 @@ function useReveal(resetKey: string, delayMs = 80) {
 function VotingWaveBackdrop() {
   return (
     <div
-      className="evote-voting-wave-bob pointer-events-none absolute inset-x-[-20%] top-[62%] h-28 -translate-y-1/2 overflow-hidden opacity-70 sm:h-36"
+      className="evote-voting-wave-bob pointer-events-none absolute inset-x-[-35%] top-[68%] h-52 -translate-y-1/2 overflow-hidden opacity-70 sm:h-72 md:h-80"
       aria-hidden
     >
       <div className="evote-voting-wave-track absolute inset-y-0 left-0 flex w-[200%]">
         <svg
           className="h-full w-1/2"
-          viewBox="0 0 600 120"
+          viewBox="0 0 600 160"
           preserveAspectRatio="none"
         >
           <path
-            d="M0 70 C 75 30, 150 110, 225 70 S 375 30, 450 70 S 575 110, 600 70 V 120 H 0 Z"
+            d="M0 88 C 75 28, 150 148, 225 88 S 375 28, 450 88 S 575 148, 600 88 V 160 H 0 Z"
             fill="rgba(11, 79, 108, 0.14)"
           />
           <path
-            d="M0 78 C 80 48, 160 98, 240 78 S 400 48, 480 78 S 560 98, 600 78 V 120 H 0 Z"
+            d="M0 100 C 80 52, 160 138, 240 100 S 400 52, 480 100 S 560 138, 600 100 V 160 H 0 Z"
             fill="rgba(27, 122, 110, 0.16)"
           />
         </svg>
         <svg
           className="h-full w-1/2"
-          viewBox="0 0 600 120"
+          viewBox="0 0 600 160"
           preserveAspectRatio="none"
         >
           <path
-            d="M0 70 C 75 30, 150 110, 225 70 S 375 30, 450 70 S 575 110, 600 70 V 120 H 0 Z"
+            d="M0 88 C 75 28, 150 148, 225 88 S 375 28, 450 88 S 575 148, 600 88 V 160 H 0 Z"
             fill="rgba(11, 79, 108, 0.14)"
           />
           <path
-            d="M0 78 C 80 48, 160 98, 240 78 S 400 48, 480 78 S 560 98, 600 78 V 120 H 0 Z"
+            d="M0 100 C 80 52, 160 138, 240 100 S 400 52, 480 100 S 560 138, 600 100 V 160 H 0 Z"
             fill="rgba(27, 122, 110, 0.16)"
           />
         </svg>
       </div>
-      <div className="evote-voting-wave-track-slow absolute inset-y-2 left-0 flex w-[200%] opacity-80">
+      <div className="evote-voting-wave-track-slow absolute inset-y-3 left-0 flex w-[200%] opacity-80">
         <svg
           className="h-full w-1/2"
-          viewBox="0 0 600 120"
+          viewBox="0 0 600 160"
           preserveAspectRatio="none"
         >
           <path
-            d="M0 62 C 70 92, 140 32, 210 62 S 350 92, 420 62 S 530 32, 600 62"
+            d="M0 78 C 70 128, 140 28, 210 78 S 350 128, 420 78 S 530 28, 600 78"
             fill="none"
             stroke="rgba(11, 79, 108, 0.35)"
-            strokeWidth="3"
+            strokeWidth="3.5"
             strokeLinecap="round"
           />
         </svg>
         <svg
           className="h-full w-1/2"
-          viewBox="0 0 600 120"
+          viewBox="0 0 600 160"
           preserveAspectRatio="none"
         >
           <path
-            d="M0 62 C 70 92, 140 32, 210 62 S 350 92, 420 62 S 530 32, 600 62"
+            d="M0 78 C 70 128, 140 28, 210 78 S 350 128, 420 78 S 530 28, 600 78"
             fill="none"
             stroke="rgba(11, 79, 108, 0.35)"
-            strokeWidth="3"
+            strokeWidth="3.5"
             strokeLinecap="round"
           />
         </svg>
@@ -211,6 +212,7 @@ export function ElectionProjectionView({
   const accent = phaseAccent(election.phase);
   const options = election.candidates;
   const [voteUrl, setVoteUrl] = useState("");
+  const [liveBallotCount, setLiveBallotCount] = useState(election.ballotCount);
   const showQr =
     Boolean(voteUrl) &&
     election.phase !== "tallied" &&
@@ -218,9 +220,45 @@ export function ElectionProjectionView({
   const stage = useReveal(`${election.electionId}:${election.phase}`);
 
   useEffect(() => {
+    setLiveBallotCount(election.ballotCount);
+  }, [election.ballotCount]);
+
+  useEffect(() => {
     setVoteUrl(
       buildVoteShareUrl(election.electionId, window.location.origin),
     );
+  }, [election.electionId]);
+
+  useEffect(() => {
+    let alive = true;
+
+    async function refreshBallotCount() {
+      const res = await fetch(
+        `/api/election?id=${encodeURIComponent(election.electionId)}`,
+      );
+      if (!alive || !res.ok) {
+        return;
+      }
+      const data = await readResponseJson<{
+        stats?: { ballotCount?: number };
+      }>(res);
+      if (
+        data &&
+        typeof data.stats?.ballotCount === "number" &&
+        Number.isFinite(data.stats.ballotCount)
+      ) {
+        setLiveBallotCount(data.stats.ballotCount);
+      }
+    }
+
+    void refreshBallotCount();
+    const timer = window.setInterval(() => {
+      void refreshBallotCount();
+    }, 2000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
   }, [election.electionId]);
 
   return (
@@ -305,7 +343,7 @@ export function ElectionProjectionView({
             >
               <QRCodeSVG
                 value={voteUrl}
-                size={200}
+                size={300}
                 level="M"
                 bgColor="#ffffff"
                 fgColor="#0f1c24"
@@ -387,7 +425,7 @@ export function ElectionProjectionView({
           <p className="text-base text-[#4d6470]">
             已收到{" "}
             <span className="font-semibold tabular-nums text-[#0f1c24]">
-              {election.ballotCount}
+              {liveBallotCount}
             </span>{" "}
             票
           </p>

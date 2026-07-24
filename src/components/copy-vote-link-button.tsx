@@ -11,16 +11,20 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { buildVoteShareUrl } from "@/lib/election-share";
+import {
+  buildVoteShareMessage,
+  buildVoteShareUrl,
+} from "@/lib/election-share";
 
 type CopyVoteLinkButtonProps = {
   electionId: string;
+  title: string;
+  votingEndsAt?: string | null;
   size?: "default" | "sm" | "icon";
   variant?: "default" | "outline" | "secondary" | "ghost";
   label?: string;
@@ -36,8 +40,22 @@ function shareUrl(electionId: string): string {
   );
 }
 
+function shareMessage(
+  electionId: string,
+  title: string,
+  votingEndsAt?: string | null,
+): string {
+  return buildVoteShareMessage({
+    title,
+    url: shareUrl(electionId),
+    votingEndsAt,
+  });
+}
+
 export function CopyVoteLinkButton({
   electionId,
+  title,
+  votingEndsAt = null,
   size = "default",
   variant = "outline",
   label = "複製連結",
@@ -45,34 +63,34 @@ export function CopyVoteLinkButton({
   iconOnly = false,
 }: CopyVoteLinkButtonProps) {
   const [open, setOpen] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const url = open ? shareUrl(electionId) : "";
+  const textRef = useRef<HTMLTextAreaElement>(null);
+  const message = open ? shareMessage(electionId, title, votingEndsAt) : "";
 
   useEffect(() => {
     if (!open) {
       return;
     }
     const id = window.setTimeout(() => {
-      const input = inputRef.current;
-      if (!input) {
+      const area = textRef.current;
+      if (!area) {
         return;
       }
-      input.focus();
-      input.select();
+      area.focus();
+      area.select();
     }, 0);
     return () => {
       window.clearTimeout(id);
     };
-  }, [open, electionId]);
+  }, [open, electionId, title, votingEndsAt]);
 
   async function copyToClipboard() {
-    const value = shareUrl(electionId);
+    const value = shareMessage(electionId, title, votingEndsAt);
     if (!navigator.clipboard?.writeText) {
       toast.error("此瀏覽器不支援複製到剪貼簿");
       return;
     }
     await navigator.clipboard.writeText(value);
-    toast.success("已複製投票連結");
+    toast.success("已複製投票訊息與連結");
   }
 
   const triggerButton = (
@@ -100,16 +118,17 @@ export function CopyVoteLinkButton({
         <DialogTrigger asChild>{triggerButton}</DialogTrigger>
       )}
       <DialogContent>
-        <DialogTitle>複製投票連結</DialogTitle>
+        <DialogTitle>複製投票訊息</DialogTitle>
         <DialogDescription className="mt-1">
-          將此連結分享給其他可投票者。
+          將包含投票名稱、截止時間（若有）與連結的訊息分享給投票權人。
         </DialogDescription>
         <div className="relative mt-4">
-          <Input
-            ref={inputRef}
+          <textarea
+            ref={textRef}
             readOnly
-            value={url}
-            className="font-mono text-xs"
+            value={message}
+            rows={5}
+            className="w-full resize-none rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 font-mono text-xs leading-relaxed"
             onFocus={(event) => {
               event.currentTarget.select();
             }}
