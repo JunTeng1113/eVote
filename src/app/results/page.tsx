@@ -30,12 +30,17 @@ import { calcPct, formatPct, formatTalliedAt } from "@/lib/results-ranking";
 import { readResponseJson } from "@/lib/read-response-json";
 import { ResultsProjectionView } from "@/components/results-projection-view";
 import { toast } from "sonner";
+import {
+  isNamedBallotMode,
+  requiresEligibleList,
+  votingModeLabel,
+} from "@/lib/voting-mode";
 
 type ElectionResult = {
   electionId: string;
   title: string;
   phase: string;
-  votingMode: "anonymous" | "named" | "open";
+  votingMode: "anonymous" | "named" | "named_open" | "open";
   scheduleMode: "unlimited" | "timed" | "duration";
   scheduleLabel?: string;
   candidates: Array<{
@@ -79,13 +84,7 @@ function phaseText(phase: string): string {
 }
 
 function modeLabel(mode: ElectionResult["votingMode"]): string {
-  if (mode === "named") {
-    return "記名";
-  }
-  if (mode === "open") {
-    return "無須登入";
-  }
-  return "不記名";
+  return votingModeLabel(mode);
 }
 
 function buildExportInput(
@@ -101,10 +100,12 @@ function buildExportInput(
     title: selected.title,
     modeLabel: modeLabel(selected.votingMode),
     talliedAt: formatTalliedAt(selected.tallyDetail.talliedAt),
-    eligibleLabel:
-      selected.votingMode === "open" ? "已投票人數" : "投票權人數",
-    eligibleCount:
-      selected.votingMode === "open" ? validVotes : eligibleVoters,
+    eligibleLabel: requiresEligibleList(selected.votingMode)
+      ? "投票權人數"
+      : "已投票人數",
+    eligibleCount: requiresEligibleList(selected.votingMode)
+      ? eligibleVoters
+      : validVotes,
     totalVotes: selected.tallyDetail.total,
     turnout,
     items: selected.candidates.map((c) => ({
@@ -392,12 +393,14 @@ function ResultsContent() {
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-lg border border-[var(--border)] px-4 py-3">
               <div className="text-xs text-[var(--muted-foreground)]">
-                {selected.votingMode === "open" ? "已投票人數" : "投票權人數"}
+                {requiresEligibleList(selected.votingMode)
+                  ? "投票權人數"
+                  : "已投票人數"}
               </div>
               <div className="mt-1 text-2xl font-semibold tabular-nums">
-                {selected.votingMode === "open"
-                  ? validVotes
-                  : eligibleVoters}
+                {requiresEligibleList(selected.votingMode)
+                  ? eligibleVoters
+                  : validVotes}
               </div>
             </div>
             <div className="rounded-lg border border-[var(--border)] px-4 py-3">
@@ -432,7 +435,7 @@ function ResultsContent() {
                 counts={selected.tallyDetail.counts}
                 total={selected.tallyDetail.total}
               />
-              {selected.votingMode === "named" &&
+              {isNamedBallotMode(selected.votingMode) &&
               selected.tallyDetail.namedVotes &&
               selected.tallyDetail.namedVotes.length > 0 ? (
                 <div className="space-y-3">
@@ -441,7 +444,11 @@ function ResultsContent() {
                     <table className="w-full text-sm">
                       <thead className="bg-[var(--muted)]/60 text-left">
                         <tr>
-                          <th className="px-3 py-2 font-medium">投票權人</th>
+                          <th className="px-3 py-2 font-medium">
+                            {selected.votingMode === "named_open"
+                              ? "登入帳號"
+                              : "投票權人"}
+                          </th>
                           <th className="px-3 py-2 font-medium">選擇</th>
                         </tr>
                       </thead>
@@ -488,10 +495,12 @@ function ResultsContent() {
             title: selected.title,
             modeLabel: modeLabel(selected.votingMode),
             talliedAt: formatTalliedAt(selected.tallyDetail.talliedAt),
-            eligibleLabel:
-              selected.votingMode === "open" ? "已投票人數" : "投票權人數",
-            eligibleCount:
-              selected.votingMode === "open" ? validVotes : eligibleVoters,
+            eligibleLabel: requiresEligibleList(selected.votingMode)
+              ? "投票權人數"
+              : "已投票人數",
+            eligibleCount: requiresEligibleList(selected.votingMode)
+              ? eligibleVoters
+              : validVotes,
             totalVotes: selected.tallyDetail.total,
             turnout,
             candidates: selected.candidates,

@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import {
   canReopenVoting,
   durationMinutesFromParts,
+  durationPartsFromMinutes,
   formatDurationMinutes,
   MAX_DURATION_MINUTES,
   MIN_DURATION_MINUTES,
@@ -48,12 +49,17 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Maximize2 } from "lucide-react";
+import {
+  isGuestOpenMode,
+  requiresEligibleList,
+  votingModeLabel,
+} from "@/lib/voting-mode";
 
 const titleFormSchema = z
   .object({
     title: z.string().min(2, "請輸入投票標題"),
     description: z.string().optional(),
-    votingMode: z.enum(["anonymous", "named", "open"]),
+    votingMode: z.enum(["anonymous", "named", "named_open", "open"]),
     scheduleMode: z.enum(["unlimited", "timed", "duration"]),
     votingStartsAt: z.string().optional(),
     votingEndsAt: z.string().optional(),
@@ -121,7 +127,7 @@ const emailsFormSchema = z.object({
   emails: z.string().min(3, "請輸入至少一個 Email"),
 });
 
-type AdminSection = "create" | "list";
+type AdminSection = "create" | "edit" | "list";
 type CreateStep = 1 | 2 | 3;
 type DetailTab = "overview" | "audit" | "voters" | "managers";
 
@@ -137,7 +143,7 @@ type ElectionSummary = {
   title: string;
   description: string;
   phase: string;
-  votingMode: "anonymous" | "named" | "open";
+  votingMode: "anonymous" | "named" | "named_open" | "open";
   scheduleMode: "unlimited" | "timed" | "duration";
   votingStartsAt: string | null;
   votingEndsAt: string | null;
@@ -194,13 +200,7 @@ function phaseText(phase: string): string {
 }
 
 function votingModeText(mode: string): string {
-  if (mode === "named") {
-    return "記名";
-  }
-  if (mode === "open") {
-    return "無須登入";
-  }
-  return "不記名";
+  return votingModeLabel(mode);
 }
 
 function scheduleModeText(mode: string): string {
@@ -222,6 +222,18 @@ function newDraftCandidate(
     party: partial?.party ?? "",
     imageUrl: partial?.imageUrl ?? null,
   };
+}
+
+function toDatetimeLocalValue(iso: string | null | undefined): string {
+  if (!iso) {
+    return "";
+  }
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 /** 每行一個選項；可用 Tab、|、逗號分隔「名稱」與「補充說明」。 */
@@ -629,7 +641,7 @@ export default function AdminPage() {
                 meta.durationUnit,
               )
             : undefined,
-        voterEmails: votingMode === "open" ? "" : voterEmailsDraft,
+        voterEmails: requiresEligibleList(votingMode) ? voterEmailsDraft : "",
         candidates,
       }),
     });
@@ -911,6 +923,157 @@ export default function AdminPage() {
     await loadElections(selectedId);
   }
 
+  async function beginEditSettings() {
+    if (!selected) {
+      return;
+    }
+    if (selected.phase !== "voting" && selected.phase !== "closed") {
+      toast.error("開票中或已開票後無法修改設定，請先重設此投票");
+      return;
+    }
+    if (selected.stats.ballotCount > 0) {
+      const first = await confirm({
+        title: "修改投票設定",
+        description:
+          "已有人投票。修改設定將重設此投票，清除所有選票，所有人必須重新投票（保留本場名單）。",
+        confirmLabel: "繼續",
+        destructive: true,
+      });
+      if (!first) {
+        return;
+      }
+      const second = await confirm({
+        title: "再次確認",
+        description: "請再次確認：確定要修改設定並重設所有選票？",
+        confirmLabel: "開始修改",
+        destructive: true,
+      });
+      if (!second) {
+        return;
+      }
+    }
+
+    const duration =
+      selected.scheduleMode === "duration" &&
+      selected.votingStartsAt &&
+      selected.votingEndsAt
+        ? durationPartsFromMinutes(
+            Math.max(
+              1,
+              Math.round(
+                (new Date(selected.votingEndsAt).getTime() -
+                  new Date(selected.votingStartsAt).getTime()) /
+                  60_000,
+              ),
+            ),
+          )
+        : { value: 3, unit: "minutes" as const };
+
+    titleForm.reset({
+      title: selected.title,
+      description: selected.description,
+      votingMode: selected.votingMode,
+      scheduleMode: selected.scheduleMode,
+      votingStartsAt: toDatetimeLocalValue(selected.votingStartsAt),
+      votingEndsAt: toDatetimeLocalValue(selected.votingEndsAt),
+      durationValue: duration.value,
+      durationUnit: duration.unit,
+    });
+    const options = selected.candidates ?? [];
+    setDraftCandidates(
+      options.length >= 2
+        ? options.map((c) =>
+            newDraftCandidate({
+              name: c.name,
+              party: c.party,
+              imageUrl: c.imageUrl,
+            }),
+          )
+        : [newDraftCandidate(), newDraftCandidate()],
+    );
+    setBulkCandidatesDraft("");
+    setShowBulkCandidates(false);
+    setCreateStep(1);
+    setSection("edit");
+  }
+
+  async function submitRevise() {
+    if (!selectedId) {
+      return;
+    }
+    const meta = titleForm.getValues();
+    const candidates = draftCandidates
+      .map((c) => ({
+        name: c.name.trim(),
+        party: c.party.trim() || undefined,
+        imageUrl: c.imageUrl,
+      }))
+      .filter((c) => c.name.length > 0);
+
+    if (candidates.length < 2) {
+      toast.error("至少需要 2 個投票選項");
+      setCreateStep(2);
+      return;
+    }
+    const duplicates = findDuplicateCandidateNames(candidates);
+    if (duplicates.length > 0) {
+      toast.error(`選項名稱不可重複：${duplicates.join("、")}`);
+      setCreateStep(2);
+      return;
+    }
+
+    const valid = await titleForm.trigger();
+    if (!valid) {
+      setCreateStep(1);
+      return;
+    }
+
+    setBusy(true);
+    const res = await fetch("/api/admin/elections", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        electionId: selectedId,
+        revise: true,
+        title: meta.title,
+        description: meta.description,
+        votingMode: meta.votingMode,
+        scheduleMode: meta.scheduleMode,
+        votingStartsAt:
+          meta.scheduleMode === "timed" && meta.votingStartsAt
+            ? new Date(meta.votingStartsAt).toISOString()
+            : undefined,
+        votingEndsAt:
+          meta.scheduleMode === "timed" && meta.votingEndsAt
+            ? new Date(meta.votingEndsAt).toISOString()
+            : undefined,
+        durationMinutes:
+          meta.scheduleMode === "duration"
+            ? durationMinutesFromParts(
+                meta.durationValue ?? 0,
+                meta.durationUnit,
+              )
+            : undefined,
+        candidates,
+      }),
+    });
+    const data = (await res.json()) as {
+      ok: boolean;
+      error?: string;
+      election?: ElectionSummary;
+    };
+    setBusy(false);
+    if (!data.ok || !data.election) {
+      toast.error(data.error ?? "儲存失敗");
+      return;
+    }
+    toast.success("已更新設定並重設投票，請通知所有人重新投票");
+    resetCreateWizard();
+    await loadElections(selectedId);
+    setSection("list");
+    setDetailTab("overview");
+  }
+
   async function onDelete() {
     if (!selectedId) {
       return;
@@ -1007,6 +1170,9 @@ export default function AdminPage() {
         <Button
           variant={section === "list" ? "default" : "outline"}
           onClick={() => {
+            if (section === "edit") {
+              resetCreateWizard();
+            }
             setSection("list");
             void loadElections(selectedId);
           }}
@@ -1016,6 +1182,7 @@ export default function AdminPage() {
         <Button
           variant={section === "create" ? "default" : "outline"}
           onClick={() => {
+            resetCreateWizard();
             setSection("create");
           }}
         >
@@ -1023,22 +1190,37 @@ export default function AdminPage() {
         </Button>
       </div>
 
-      {section === "create" ? (
+      {section === "create" || section === "edit" ? (
         <Card>
           <CardHeader>
-            <CardTitle>建立新投票</CardTitle>
-            <CardDescription>請依序完成三個階段後送出。</CardDescription>
+            <CardTitle>
+              {section === "edit" ? "修改投票設定" : "建立新投票"}
+            </CardTitle>
+            <CardDescription>
+              {section === "edit"
+                ? "可修改標題、說明、投票方式、投票時間與選項。儲存後將重設選票並回到投票中（保留本場名單）。"
+                : "請依序完成三個階段後送出。"}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="flex flex-wrap gap-2">
               <StepBadge step={1} current={createStep} label="標題與說明" />
               <StepBadge step={2} current={createStep} label="投票選項" />
-              <StepBadge
-                step={3}
-                current={createStep}
-                label={votingMode === "open" ? "分享連結" : "可投票名單"}
-              />
+              {section === "create" ? (
+                <StepBadge
+                  step={3}
+                  current={createStep}
+                  label={
+                    requiresEligibleList(votingMode) ? "可投票名單" : "分享連結"
+                  }
+                />
+              ) : null}
             </div>
+            {section === "edit" ? (
+              <Alert>
+                儲存後所有已投選票將清除，投票權人必須重新投票。限時投票會自儲存當下重新起算。
+              </Alert>
+            ) : null}
 
             {createStep === 1 ? (
               <form
@@ -1065,7 +1247,7 @@ export default function AdminPage() {
                 </div>
                 <fieldset className="space-y-2">
                   <legend className="text-sm font-medium">投票方式</legend>
-                  <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-[var(--border)] px-3 py-3 has-[:checked]:border-[var(--primary)] has-[:checked]:bg-[var(--muted)]">
                       <input
                         type="radio"
@@ -1091,10 +1273,26 @@ export default function AdminPage() {
                       />
                       <span>
                         <span className="block text-sm font-medium">
-                          記名投票
+                          記名（名單內）
                         </span>
                         <span className="mt-0.5 block text-xs text-[var(--muted-foreground)]">
                           需登入且在名單內；開票後可對照每位投票權人的選擇。
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-[var(--border)] px-3 py-3 has-[:checked]:border-[var(--primary)] has-[:checked]:bg-[var(--muted)]">
+                      <input
+                        type="radio"
+                        value="named_open"
+                        className="mt-1"
+                        {...titleForm.register("votingMode")}
+                      />
+                      <span>
+                        <span className="block text-sm font-medium">
+                          記名開放
+                        </span>
+                        <span className="mt-0.5 block text-xs text-[var(--muted-foreground)]">
+                          需登入即可投票，不必事先在名單內；開票後可對照每位投票人的選擇。
                         </span>
                       </span>
                     </label>
@@ -1462,14 +1660,24 @@ export default function AdminPage() {
                   >
                     上一步
                   </Button>
-                  <Button type="button" onClick={goCreateStep3}>
-                    下一步
-                  </Button>
+                  {section === "edit" ? (
+                    <Button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void submitRevise()}
+                    >
+                      {busy ? "儲存中…" : "儲存並重設投票"}
+                    </Button>
+                  ) : (
+                    <Button type="button" onClick={goCreateStep3}>
+                      下一步
+                    </Button>
+                  )}
                 </div>
               </div>
             ) : null}
 
-            {createStep === 3 ? (
+            {section === "create" && createStep === 3 ? (
               <div className="space-y-4">
                 <div className="rounded-lg border border-[var(--border)] bg-[var(--muted)]/40 p-3 text-sm">
                   <div className="font-medium">{titleForm.getValues("title")}</div>
@@ -1480,14 +1688,7 @@ export default function AdminPage() {
                     個
                   </div>
                 </div>
-                {votingMode === "open" ? (
-                  <Alert>
-                    <p className="font-medium">此場無須登入，也不需可投票名單</p>
-                    <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                      建立後請複製專屬投票連結分享給參與者。系統會記錄連線位址雜湊，同一連線無法重複投票。此場不會出現在一般投票列表。
-                    </p>
-                  </Alert>
-                ) : (
+                {requiresEligibleList(votingMode) ? (
                   <div className="space-y-2">
                     <Label htmlFor="voterEmailsDraft">此場可投票 Email</Label>
                     <textarea
@@ -1503,6 +1704,20 @@ export default function AdminPage() {
                       可先空白，建立後再於「查看投票列表」補上。此名單只屬於這一場。
                     </p>
                   </div>
+                ) : votingMode === "named_open" ? (
+                  <Alert>
+                    <p className="font-medium">記名開放：需登入，不需名單</p>
+                    <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                      任何以 Google 登入的帳號皆可投票；開票後可對照每位投票人的選擇。請複製專屬投票連結分享給參與者。
+                    </p>
+                  </Alert>
+                ) : (
+                  <Alert>
+                    <p className="font-medium">此場無須登入，也不需可投票名單</p>
+                    <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                      建立後請複製專屬投票連結分享給參與者。系統會記錄連線位址雜湊，同一連線無法重複投票。此場不會出現在一般投票列表。
+                    </p>
+                  </Alert>
                 )}
                 <div className="flex justify-between gap-2">
                   <Button
@@ -1588,9 +1803,11 @@ export default function AdminPage() {
                             election.candidates?.length ??
                             0}{" "}
                           個選項 ·{" "}
-                          {election.votingMode === "open"
+                          {isGuestOpenMode(election.votingMode)
                             ? "公開連結投票"
-                            : `投票權人數 ${election.stats.eligibleVoters} 人`}{" "}
+                            : election.votingMode === "named_open"
+                              ? "記名開放（需登入）"
+                              : `投票權人數 ${election.stats.eligibleVoters} 人`}{" "}
                           · 已投票人數 {election.stats.ballotCount} 人
                         </div>
                       </button>
@@ -1650,10 +1867,12 @@ export default function AdminPage() {
                   <Button
                     variant={detailTab === "voters" ? "default" : "outline"}
                     onClick={() => setDetailTab("voters")}
-                    disabled={selected.votingMode === "open"}
+                    disabled={!requiresEligibleList(selected.votingMode)}
                     title={
-                      selected.votingMode === "open"
-                        ? "無須登入投票不使用可投票名單"
+                      !requiresEligibleList(selected.votingMode)
+                        ? isGuestOpenMode(selected.votingMode)
+                          ? "無須登入投票不使用可投票名單"
+                          : "記名開放不使用可投票名單"
                         : undefined
                     }
                   >
@@ -1698,9 +1917,13 @@ export default function AdminPage() {
                             投票時間：{selected.scheduleLabel}
                           </p>
                         ) : null}
-                        {selected.votingMode === "open" ? (
+                        {isGuestOpenMode(selected.votingMode) ? (
                           <Alert>
                             此場為無須登入投票，請透過上方連結分享給參與者。一般投票列表不會顯示此場。
+                          </Alert>
+                        ) : selected.votingMode === "named_open" ? (
+                          <Alert>
+                            此場為記名開放：需 Google 登入即可投票，不必事先在名單內。開票後可對照每位投票人的選擇。
                           </Alert>
                         ) : null}
                       </div>
@@ -1778,6 +2001,14 @@ export default function AdminPage() {
                                     恢復投票
                                   </Button>
                                 ) : null}
+                                <Button
+                                  disabled={busy}
+                                  variant="outline"
+                                  className="w-full"
+                                  onClick={() => void beginEditSettings()}
+                                >
+                                  修改投票設定
+                                </Button>
                               </>
                             ) : null}
                             {selected.phase === "mixing" ? (
@@ -1791,8 +2022,8 @@ export default function AdminPage() {
                               ? "現場或線上投票結束後，請先截止再執行開票。"
                               : selected.phase === "closed"
                                 ? selectedCanReopen
-                                  ? "確認無誤後執行開票；若需繼續投票可先恢復。"
-                                  : "投票時段已過，請執行開票公布結果。"
+                                  ? "確認無誤後執行開票；若需改設定可修改後重設；若需繼續投票可先恢復。"
+                                  : "投票時段已過，可執行開票，或修改設定後重新開放投票。"
                                 : selected.phase === "tallied"
                                   ? "此場已完成開票，可查看結果。"
                                   : null}

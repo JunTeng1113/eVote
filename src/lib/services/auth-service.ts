@@ -1,5 +1,6 @@
 import { domainSeparatedHash } from "@/lib/crypto/hash";
 import {
+  findNamedBallotByEmail,
   findVoterByEmail,
   normalizeEmail,
   requireElection,
@@ -10,16 +11,22 @@ import {
   votingWindowMessage,
 } from "@/lib/voting-schedule";
 import { resolveElectionSchedule } from "@/lib/voting-schedule-server";
+import {
+  isGuestOpenMode,
+  isNamedBallotMode,
+  requiresEligibleList,
+} from "@/lib/voting-mode";
 
 export async function issueAuthTicket(electionId: string, email: string) {
   const election = await requireElection(electionId);
   if (election.votingMode !== "anonymous") {
     return {
       ok: false as const,
-      error:
-        election.votingMode === "open"
-          ? "此場為無須登入投票，無需領取匿名投票憑證"
-          : "此場為記名投票，無需領取匿名投票憑證",
+      error: isGuestOpenMode(election.votingMode)
+        ? "此場為無須登入投票，無需領取匿名投票憑證"
+        : isNamedBallotMode(election.votingMode)
+          ? "此場為記名投票，無需領取匿名投票憑證"
+          : "此場投票方式不符",
     };
   }
   const schedule = await resolveElectionSchedule(electionId, election);
@@ -73,6 +80,32 @@ export async function getVoterStatus(electionId: string, email: string) {
   const election = await requireElection(electionId);
   const schedule = await resolveElectionSchedule(electionId, election);
   const windowStatus = getVotingWindowStatus(schedule);
+
+  if (election.votingMode === "named_open") {
+    const named = await findNamedBallotByEmail(electionId, email);
+    return {
+      eligible: true,
+      hasVoted: Boolean(named),
+      phase: schedule.phase,
+      windowStatus,
+      message: named
+        ? "你已經完成投票"
+        : windowStatus === "open"
+          ? "你可以投票"
+          : votingWindowMessage(windowStatus),
+    };
+  }
+
+  if (!requiresEligibleList(election.votingMode)) {
+    return {
+      eligible: false,
+      hasVoted: false,
+      phase: schedule.phase,
+      windowStatus,
+      message: "此場投票方式請使用對應流程",
+    };
+  }
+
   const voter = await findVoterByEmail(electionId, email);
   if (!voter) {
     return {

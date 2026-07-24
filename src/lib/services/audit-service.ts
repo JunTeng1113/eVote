@@ -5,25 +5,36 @@ import {
 } from "@/lib/crypto/zk-proof";
 import { verifyDecryptionProof } from "@/lib/crypto/elgamal";
 import { listElections, requireElection } from "@/lib/store/election-store";
+import { isNamedBallotMode } from "@/lib/voting-mode";
 
 export async function runUniversalAudit(electionId: string) {
   const election = await requireElection(electionId);
   const checks: Array<{ name: string; passed: boolean; detail: string }> = [];
 
-  if (election.votingMode === "named") {
-    const authorized = election.voters.filter((v) => v.authorized).length;
-    checks.push({
-      name: "記名選票檢查",
-      passed: election.namedBallots.length === authorized,
-      detail: `記名票 ${election.namedBallots.length}／已投票 ${authorized}`,
-    });
-    checks.push({
-      name: "資格人數檢查",
-      passed:
-        election.namedBallots.length <= authorized &&
-        authorized <= election.voters.length,
-      detail: `票數 ${election.namedBallots.length}／已投票 ${authorized}／名單 ${election.voters.length}`,
-    });
+  if (isNamedBallotMode(election.votingMode)) {
+    if (election.votingMode === "named_open") {
+      const emails = election.namedBallots.map((b) => b.voterEmail);
+      const unique = new Set(emails);
+      checks.push({
+        name: "記名開放選票檢查",
+        passed: unique.size === election.namedBallots.length,
+        detail: `記名票 ${election.namedBallots.length}／獨立帳號 ${unique.size}`,
+      });
+    } else {
+      const authorized = election.voters.filter((v) => v.authorized).length;
+      checks.push({
+        name: "記名選票檢查",
+        passed: election.namedBallots.length === authorized,
+        detail: `記名票 ${election.namedBallots.length}／已投票 ${authorized}`,
+      });
+      checks.push({
+        name: "資格人數檢查",
+        passed:
+          election.namedBallots.length <= authorized &&
+          authorized <= election.voters.length,
+        detail: `票數 ${election.namedBallots.length}／已投票 ${authorized}／名單 ${election.voters.length}`,
+      });
+    }
     if (election.tally) {
       const recount: Record<string, number> = {};
       for (const c of election.candidates) {
@@ -57,7 +68,10 @@ export async function runUniversalAudit(electionId: string) {
       phase: election.phase,
       checks,
       passed: election.tally ? checks.every((c) => c.passed) : pendingOk,
-      individualHint: "此場為記名投票，開票後可對照投票權人與選項。",
+      individualHint:
+        election.votingMode === "named_open"
+          ? "此場為記名開放投票，開票後可對照登入帳號與選項。"
+          : "此場為記名投票，開票後可對照投票權人與選項。",
     };
   }
 

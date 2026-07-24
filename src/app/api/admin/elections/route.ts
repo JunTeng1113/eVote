@@ -10,6 +10,7 @@ import {
   listManagedElectionSummaries,
   publicElectionView,
   resetElection,
+  reviseElectionSettings,
   updateCandidateImage,
   updateElectionMeta,
 } from "@/lib/store/election-store";
@@ -22,6 +23,7 @@ import {
 import {
   createElectionSchema,
   electionIdSchema,
+  reviseElectionSchema,
   updateCandidateImageSchema,
   updateElectionSchema,
 } from "@/lib/schemas/voting";
@@ -150,6 +152,33 @@ export async function PATCH(request: Request) {
         imagePatch.data.candidateId,
         imagePatch.data.imageUrl,
       );
+      return NextResponse.json({
+        ok: true,
+        election: publicElectionView(election),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "更新失敗";
+      return NextResponse.json({ ok: false, error: message }, { status: 400 });
+    }
+  }
+
+  const reviseParsed = reviseElectionSchema.safeParse(body);
+  if (reviseParsed.success) {
+    const access = await requireElectionManager(reviseParsed.data.electionId);
+    if (!access.ok) {
+      return NextResponse.json(access, { status: 403 });
+    }
+    try {
+      const election = await reviseElectionSettings(reviseParsed.data.electionId, {
+        title: reviseParsed.data.title,
+        description: reviseParsed.data.description,
+        votingMode: reviseParsed.data.votingMode,
+        scheduleMode: reviseParsed.data.scheduleMode,
+        votingStartsAt: reviseParsed.data.votingStartsAt,
+        votingEndsAt: reviseParsed.data.votingEndsAt,
+        durationMinutes: reviseParsed.data.durationMinutes,
+        candidates: reviseParsed.data.candidates,
+      });
       return NextResponse.json({
         ok: true,
         election: publicElectionView(election),

@@ -46,14 +46,14 @@ export default function ConfirmPage() {
       bulletinIndex?: number;
       submittedAt?: string;
       electionTitle?: string;
-      votingMode?: "anonymous" | "named" | "open";
+      votingMode?: "anonymous" | "named" | "named_open" | "open";
     };
     if (!data.found) {
       setLookup("找不到這組確認碼。請確認是否貼上完整內容。");
       return;
     }
     const privacyNote =
-      data.votingMode === "named"
+      data.votingMode === "named" || data.votingMode === "named_open"
         ? "確認碼只證明系統有收到你的票。"
         : "為保護隱私，不會顯示你投給誰。";
     setLookup(

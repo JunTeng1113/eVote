@@ -60,7 +60,7 @@ export const createElectionSchema = z
   .object({
     title: z.string().min(2, "請輸入投票標題").max(120),
     description: z.string().max(500).optional(),
-    votingMode: z.enum(["anonymous", "named", "open"]).default("anonymous"),
+    votingMode: z.enum(["anonymous", "named", "named_open", "open"]).default("anonymous"),
     scheduleMode: z
       .enum(["unlimited", "timed", "duration"])
       .default("unlimited"),
@@ -142,6 +142,14 @@ export const updateElectionSchema = z.object({
   description: z.string().max(500).optional(),
   candidates: z.array(candidateInputSchema).min(2).optional(),
 });
+
+/** 修改既有投票設定（會重設選票）；須帶 revise: true。 */
+export const reviseElectionSchema = createElectionSchema.and(
+  z.object({
+    electionId: z.string().min(1, "缺少投票編號"),
+    revise: z.literal(true),
+  }),
+);
 
 export const updateCandidateImageSchema = z.object({
   electionId: z.string().min(1),

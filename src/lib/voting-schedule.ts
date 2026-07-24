@@ -98,6 +98,22 @@ export function durationMinutesFromParts(
   return Math.round(value);
 }
 
+export function durationPartsFromMinutes(minutes: number): {
+  value: number;
+  unit: "minutes" | "hours" | "days";
+} {
+  if (!Number.isFinite(minutes) || minutes <= 0) {
+    return { value: 3, unit: "minutes" };
+  }
+  if (minutes % (24 * 60) === 0) {
+    return { value: minutes / (24 * 60), unit: "days" };
+  }
+  if (minutes % 60 === 0) {
+    return { value: minutes / 60, unit: "hours" };
+  }
+  return { value: Math.round(minutes), unit: "minutes" };
+}
+
 export function formatScheduleRange(
   startsAt: string | null,
   endsAt: string | null,

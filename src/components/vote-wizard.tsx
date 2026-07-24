@@ -29,13 +29,18 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { voteChoiceSchema } from "@/lib/schemas/voting";
 import { buildVoteShareUrl } from "@/lib/election-share";
+import {
+  isGuestOpenMode,
+  isNamedBallotMode,
+  votingModeLabel,
+} from "@/lib/voting-mode";
 
 type ElectionPublic = {
   electionId: string;
   title: string;
   description: string;
   phase: string;
-  votingMode: "anonymous" | "named" | "open";
+  votingMode: "anonymous" | "named" | "named_open" | "open";
   scheduleMode: "unlimited" | "timed" | "duration";
   votingStartsAt: string | null;
   votingEndsAt: string | null;
@@ -175,7 +180,8 @@ export function VoteWizard({
     defaultValues: { candidateId: "" },
   });
 
-  const isOpenMode = election?.votingMode === "open";
+  const isOpenMode = isGuestOpenMode(election?.votingMode ?? "");
+  const isNamedMode = isNamedBallotMode(election?.votingMode ?? "");
   const pagedOptions = slicePage(options, listPage, LIST_PAGE_SIZE);
 
   useEffect(() => {
@@ -241,7 +247,7 @@ export function VoteWizard({
     if (!presetId || status !== "authenticated") {
       return;
     }
-    if (!election || election.votingMode === "open") {
+    if (!election || isGuestOpenMode(election.votingMode)) {
       return;
     }
     if (me) {
@@ -310,7 +316,7 @@ export function VoteWizard({
     setShowList(false);
     setLinkBootstrapping(false);
 
-    if (electionData.votingMode === "open") {
+    if (isGuestOpenMode(electionData.votingMode)) {
       const guestRes = await fetch(
         `/api/ballot/guest?electionId=${encodeURIComponent(electionId)}`,
       );
@@ -373,7 +379,7 @@ export function VoteWizard({
     setBusy(true);
     setError(null);
 
-    if (election.votingMode === "named") {
+    if (isNamedBallotMode(election.votingMode)) {
       setProgress("正在送出記名投票…");
       const submitRes = await fetch("/api/ballot/named", {
         method: "POST",
@@ -412,7 +418,7 @@ export function VoteWizard({
       return;
     }
 
-    if (election.votingMode === "open") {
+    if (isGuestOpenMode(election.votingMode)) {
       setProgress("正在送出投票…");
       const submitRes = await fetch("/api/ballot/guest", {
         method: "POST",
@@ -607,9 +613,11 @@ export function VoteWizard({
           <CardDescription>
             {presetId
               ? election
-                ? `「${election.title}」需登入後投票。請使用有投票資格的 Google 帳號登入。`
-                : "你正透過專屬投票連結進入。請使用有投票資格的 Google 帳號登入。"
-              : "使用 Google 帳號登入後即可投票。只有主辦單位允許的帳號可以投票。"}
+                ? election.votingMode === "named_open"
+                  ? `「${election.title}」為記名開放投票，請以 Google 帳號登入後投票。`
+                  : `「${election.title}」需登入後投票。請使用有投票資格的 Google 帳號登入。`
+                : "你正透過專屬投票連結進入。請使用 Google 帳號登入。"
+              : "使用 Google 帳號登入後即可投票。"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -642,9 +650,11 @@ export function VoteWizard({
         <CardContent className="space-y-4">
           <Alert className="break-all font-mono text-xs">{receiptHash}</Alert>
           <p className="text-sm text-[var(--muted-foreground)]">
-            {election.votingMode === "named"
-              ? "此場為記名投票，開票後主辦單位與結果頁可對照你的選擇。"
-              : election.votingMode === "open"
+            {isNamedMode
+              ? election.votingMode === "named_open"
+                ? "此場為記名開放投票，開票後主辦單位與結果頁可對照你的登入帳號與選擇。"
+                : "此場為記名投票，開票後主辦單位與結果頁可對照你的選擇。"
+              : isOpenMode
                 ? "此場無須登入；系統以連線位址防止重複投票，確認碼不會顯示你投給誰。"
                 : "為保護投票隱私，確認碼不會顯示你投給誰。"}
           </p>
@@ -795,13 +805,7 @@ export function VoteWizard({
                 {election.title}
               </CardTitle>
               <div className="flex flex-wrap justify-end gap-2 self-center">
-                <Badge>
-                  {election.votingMode === "named"
-                    ? "記名投票"
-                    : election.votingMode === "open"
-                      ? "無須登入"
-                      : "不記名投票"}
-                </Badge>
+                <Badge>{votingModeLabel(election.votingMode)}</Badge>
                 <Badge>{scheduleModeBadge(election.scheduleMode)}</Badge>
               </div>
               <CardDescription className="min-w-0">
@@ -921,7 +925,7 @@ export function VoteWizard({
                 <Button type="submit" disabled={busy} size="lg">
                   {busy
                     ? "處理中…"
-                    : election.votingMode === "named"
+                    : isNamedMode
                       ? "確認送出記名投票"
                       : "確認送出投票"}
                 </Button>

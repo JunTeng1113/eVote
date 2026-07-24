@@ -18,6 +18,11 @@ import {
   votingWindowMessage,
 } from "@/lib/voting-schedule";
 import { resolveElectionSchedule } from "@/lib/voting-schedule-server";
+import {
+  isGuestOpenMode,
+  isNamedBallotMode,
+  requiresEligibleList,
+} from "@/lib/voting-mode";
 
 type BallotPayload = Omit<BallotSubmitInput, "electionId">;
 
@@ -38,10 +43,11 @@ export async function submitBallot(
   if (election.votingMode !== "anonymous") {
     return {
       ok: false as const,
-      error:
-        election.votingMode === "open"
-          ? "此場為無須登入投票，請使用公開連結投票流程"
-          : "此場為記名投票，請使用記名投票流程",
+      error: isGuestOpenMode(election.votingMode)
+        ? "此場為無須登入投票，請使用公開連結投票流程"
+        : isNamedBallotMode(election.votingMode)
+          ? "此場為記名投票，請使用記名投票流程"
+          : "此場投票方式不符",
     };
   }
   const open = await ensureVotingOpen(electionId, election);
@@ -114,13 +120,12 @@ export async function submitNamedBallot(
   candidateId: string,
 ) {
   const election = await requireElection(electionId);
-  if (election.votingMode !== "named") {
+  if (!isNamedBallotMode(election.votingMode)) {
     return {
       ok: false as const,
-      error:
-        election.votingMode === "open"
-          ? "此場為無須登入投票，請使用公開連結投票流程"
-          : "此場為不記名投票",
+      error: isGuestOpenMode(election.votingMode)
+        ? "此場為無須登入投票，請使用公開連結投票流程"
+        : "此場為不記名投票",
     };
   }
   const open = await ensureVotingOpen(electionId, election);
@@ -145,6 +150,7 @@ export async function submitNamedBallot(
       voterEmail,
       candidateId,
       receiptHash,
+      requireEligibleList: requiresEligibleList(election.votingMode),
     });
   } catch (error) {
     const message =

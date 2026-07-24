@@ -1,12 +1,21 @@
 import { NextResponse } from "next/server";
 import { getVoterStatus, issueAuthTicket } from "@/lib/services/auth-service";
 import { requireSessionUser } from "@/lib/auth/session";
-import { findVoterByEmail, listElections } from "@/lib/store/election-store";
+import {
+  findNamedBallotByEmail,
+  findVoterByEmail,
+  listElections,
+  normalizeEmail,
+} from "@/lib/store/election-store";
 import {
   formatElectionScheduleLabel,
   getVotingWindowStatus,
 } from "@/lib/voting-schedule";
 import { resolveElectionSchedule } from "@/lib/voting-schedule-server";
+import {
+  isGuestOpenMode,
+  requiresEligibleList,
+} from "@/lib/voting-mode";
 
 export async function GET(request: Request) {
   const user = await requireSessionUser();
@@ -20,13 +29,29 @@ export async function GET(request: Request) {
   if (!electionId) {
     try {
       const elections = await listElections();
+      const email = normalizeEmail(user.email);
       const available = await Promise.all(
         elections.map(async (election) => {
-          const voter = await findVoterByEmail(election.electionId, user.email);
+          if (isGuestOpenMode(election.votingMode)) {
+            return null;
+          }
           const schedule = await resolveElectionSchedule(
             election.electionId,
             election,
           );
+          const voter = requiresEligibleList(election.votingMode)
+            ? await findVoterByEmail(election.electionId, email)
+            : null;
+          const namedOpenVoted =
+            election.votingMode === "named_open"
+              ? await findNamedBallotByEmail(election.electionId, email)
+              : null;
+          const eligible = requiresEligibleList(election.votingMode)
+            ? Boolean(voter)
+            : election.votingMode === "named_open";
+          if (!eligible) {
+            return null;
+          }
           return {
             electionId: election.electionId,
             title: election.title,
@@ -39,8 +64,11 @@ export async function GET(request: Request) {
               votingEndsAt: election.votingEndsAt,
             }),
             windowStatus: getVotingWindowStatus(schedule),
-            eligible: Boolean(voter),
-            hasVoted: Boolean(voter?.authorized),
+            eligible: true,
+            hasVoted:
+              election.votingMode === "named_open"
+                ? Boolean(namedOpenVoted)
+                : Boolean(voter?.authorized),
           };
         }),
       );
@@ -49,7 +77,7 @@ export async function GET(request: Request) {
         email: user.email,
         name: user.name,
         isAdmin: user.isAdmin,
-        elections: available,
+        elections: available.filter((item) => item !== null),
       });
     } catch (error) {
       const message =

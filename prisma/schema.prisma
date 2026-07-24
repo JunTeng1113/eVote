@@ -18,6 +18,7 @@ enum VotingMode {
   anonymous
   named
   open
+  named_open
 }
 
 enum ScheduleMode {

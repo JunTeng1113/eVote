@@ -13,13 +13,19 @@ import {
   MIN_DURATION_MINUTES,
 } from "@/lib/voting-schedule";
 import {
+  isGuestOpenMode,
+  isNamedBallotMode,
+  requiresEligibleList,
+  type VotingMode,
+} from "@/lib/voting-mode";
+import {
   Prisma,
   type Election as DbElection,
   type ElectionPhase as DbElectionPhase,
 } from "@/generated/prisma/client";
 
+export type { VotingMode };
 export type ElectionPhase = "voting" | "closed" | "mixing" | "tallied";
-export type VotingMode = "anonymous" | "named" | "open";
 export type ScheduleMode = "unlimited" | "timed" | "duration";
 
 export type Candidate = {
@@ -370,12 +376,11 @@ export async function listManagedElectionSummaries(
 
   return rows.map((row) => {
     const votingMode = (row.votingMode as VotingMode) ?? "anonymous";
-    const ballotCount =
-      votingMode === "named"
-        ? row._count.namedBallots
-        : votingMode === "open"
-          ? row._count.guestBallots
-          : row._count.ballots;
+    const ballotCount = isNamedBallotMode(votingMode)
+      ? row._count.namedBallots
+      : isGuestOpenMode(votingMode)
+        ? row._count.guestBallots
+        : row._count.ballots;
     return {
       electionId: row.electionId,
       title: row.title,
@@ -390,7 +395,7 @@ export async function listManagedElectionSummaries(
       createdByEmail: row.createdByEmail,
       managerEmails: row.managers.map((m) => m.email),
       candidateCount: row._count.candidates,
-      eligibleVoters: votingMode === "open" ? 0 : row._count.voters,
+      eligibleVoters: requiresEligibleList(votingMode) ? row._count.voters : 0,
       ballotCount,
       createdAt: row.createdAt.toISOString(),
       hasResult: row.tally !== null,
@@ -481,18 +486,16 @@ function buildVotersInput(emails: string[] | undefined) {
   return voters;
 }
 
-export async function createElection(
-  input: CreateElectionInput,
-): Promise<ElectionState> {
-  if (!input.title.trim()) {
-    throw new Error("請輸入投票標題");
-  }
-  if (input.candidates.length < 2) {
-    throw new Error("至少需要 2 個選項");
-  }
-  if (input.candidates.some((c) => !c.name.trim())) {
-    throw new Error("選項名稱不可空白");
-  }
+function resolveScheduleFields(input: {
+  scheduleMode?: ScheduleMode;
+  votingStartsAt?: string | null;
+  votingEndsAt?: string | null;
+  durationMinutes?: number;
+}): {
+  scheduleMode: ScheduleMode;
+  votingStartsAt: Date | null;
+  votingEndsAt: Date | null;
+} {
   if (input.scheduleMode === "timed") {
     if (!input.votingStartsAt || !input.votingEndsAt) {
       throw new Error("計時投票需設定開始與截止時間");
@@ -505,17 +508,13 @@ export async function createElection(
     if (end <= start) {
       throw new Error("截止時間必須晚於開始時間");
     }
+    return {
+      scheduleMode: "timed",
+      votingStartsAt: start,
+      votingEndsAt: end,
+    };
   }
-
-  let scheduleMode: ScheduleMode = "unlimited";
-  let votingStartsAt: Date | null = null;
-  let votingEndsAt: Date | null = null;
-
-  if (input.scheduleMode === "timed") {
-    scheduleMode = "timed";
-    votingStartsAt = new Date(input.votingStartsAt!);
-    votingEndsAt = new Date(input.votingEndsAt!);
-  } else if (input.scheduleMode === "duration") {
+  if (input.scheduleMode === "duration") {
     const minutes = input.durationMinutes;
     if (
       typeof minutes !== "number" ||
@@ -527,11 +526,48 @@ export async function createElection(
         `限時投票需介於 ${formatDurationMinutes(MIN_DURATION_MINUTES)} 至 ${formatDurationMinutes(MAX_DURATION_MINUTES)}`,
       );
     }
-    scheduleMode = "duration";
-    votingStartsAt = new Date();
-    votingEndsAt = new Date(votingStartsAt.getTime() + minutes * 60_000);
+    const votingStartsAt = new Date();
+    return {
+      scheduleMode: "duration",
+      votingStartsAt,
+      votingEndsAt: new Date(votingStartsAt.getTime() + minutes * 60_000),
+    };
+  }
+  return {
+    scheduleMode: "unlimited",
+    votingStartsAt: null,
+    votingEndsAt: null,
+  };
+}
+
+function normalizeVotingMode(mode: VotingMode | undefined): VotingMode {
+  if (mode === "named") {
+    return "named";
+  }
+  if (mode === "named_open") {
+    return "named_open";
+  }
+  if (mode === "open") {
+    return "open";
+  }
+  return "anonymous";
+}
+
+export async function createElection(
+  input: CreateElectionInput,
+): Promise<ElectionState> {
+  if (!input.title.trim()) {
+    throw new Error("請輸入投票標題");
+  }
+  if (input.candidates.length < 2) {
+    throw new Error("至少需要 2 個選項");
+  }
+  if (input.candidates.some((c) => !c.name.trim())) {
+    throw new Error("選項名稱不可空白");
   }
 
+  const schedule = resolveScheduleFields(input);
+  const votingMode = normalizeVotingMode(input.votingMode);
   const crypto = buildCryptoPayload();
   const electionId = newElectionId();
   const candidates = buildCandidatesInput(input.candidates);
@@ -544,22 +580,17 @@ export async function createElection(
       title: input.title.trim(),
       description: input.description?.trim() ?? "",
       phase: "voting",
-      votingMode:
-        input.votingMode === "named"
-          ? "named"
-          : input.votingMode === "open"
-            ? "open"
-            : "anonymous",
-      scheduleMode,
-      votingStartsAt,
-      votingEndsAt,
+      votingMode,
+      scheduleMode: schedule.scheduleMode,
+      votingStartsAt: schedule.votingStartsAt,
+      votingEndsAt: schedule.votingEndsAt,
       createdByEmail: creatorEmail,
       mixServers: crypto.mixServers,
       issuer: crypto.issuer as unknown as Prisma.InputJsonValue,
       threshold: crypto.threshold as unknown as Prisma.InputJsonValue,
       candidates: { create: candidates },
       voters: {
-        create: input.votingMode === "open" ? [] : voters,
+        create: requiresEligibleList(votingMode) ? voters : [],
       },
       managers: { create: [{ email: creatorEmail }] },
     },
@@ -619,6 +650,69 @@ export async function updateElectionMeta(
         })),
       });
     }
+  });
+
+  return requireElection(electionId);
+}
+
+/**
+ * 修改投票設定並重設選票（回到投票中）。
+ * 允許 voting／closed；開票中或已開票請先重設。
+ */
+export async function reviseElectionSettings(
+  electionId: string,
+  input: Omit<CreateElectionInput, "createdByEmail" | "voterEmails">,
+): Promise<ElectionState> {
+  const previous = await requireElection(electionId);
+  if (previous.phase === "mixing" || previous.phase === "tallied") {
+    throw new Error("開票中或已開票後無法修改設定，請先重設此投票");
+  }
+  if (!input.title.trim()) {
+    throw new Error("請輸入投票標題");
+  }
+  if (input.candidates.length < 2) {
+    throw new Error("至少需要 2 個選項");
+  }
+  if (input.candidates.some((c) => !c.name.trim())) {
+    throw new Error("選項名稱不可空白");
+  }
+
+  const schedule = resolveScheduleFields(input);
+  const votingMode = normalizeVotingMode(input.votingMode);
+  const crypto = buildCryptoPayload();
+  const candidates = buildCandidatesInput(input.candidates);
+  const voters = requiresEligibleList(votingMode)
+    ? previous.voters.map((v) => ({
+        email: v.email,
+        displayName: v.displayName,
+      }))
+    : [];
+
+  await prisma.$transaction(async (tx) => {
+    await tx.guestBallot.deleteMany({ where: { electionId } });
+    await tx.namedBallot.deleteMany({ where: { electionId } });
+    await tx.ballot.deleteMany({ where: { electionId } });
+    await tx.authTicket.deleteMany({ where: { electionId } });
+    await tx.eligibleVoter.deleteMany({ where: { electionId } });
+    await tx.candidate.deleteMany({ where: { electionId } });
+    await tx.election.update({
+      where: { electionId },
+      data: {
+        title: input.title.trim(),
+        description: input.description?.trim() ?? "",
+        phase: "voting",
+        votingMode,
+        scheduleMode: schedule.scheduleMode,
+        votingStartsAt: schedule.votingStartsAt,
+        votingEndsAt: schedule.votingEndsAt,
+        tally: Prisma.DbNull,
+        mixServers: crypto.mixServers,
+        issuer: crypto.issuer as unknown as Prisma.InputJsonValue,
+        threshold: crypto.threshold as unknown as Prisma.InputJsonValue,
+        candidates: { create: candidates },
+        voters: { create: voters },
+      },
+    });
   });
 
   return requireElection(electionId);
@@ -697,10 +791,7 @@ export async function resetElection(
         threshold: crypto.threshold as unknown as Prisma.InputJsonValue,
         candidates: { create: candidates },
         voters: {
-          create:
-            previous.votingMode === "open"
-              ? []
-              : voters,
+          create: requiresEligibleList(previous.votingMode) ? voters : [],
         },
       },
     });
@@ -942,21 +1033,53 @@ export async function saveNamedBallot(input: {
   voterEmail: string;
   candidateId: string;
   receiptHash: string;
+  requireEligibleList?: boolean;
 }): Promise<void> {
   const email = normalizeEmail(input.voterEmail);
+  const requireList = input.requireEligibleList !== false;
   await prisma.$transaction(async (tx) => {
-    const voter = await tx.eligibleVoter.findUnique({
-      where: {
-        electionId_email: {
+    if (requireList) {
+      const voter = await tx.eligibleVoter.findUnique({
+        where: {
+          electionId_email: {
+            electionId: input.electionId,
+            email,
+          },
+        },
+      });
+      if (!voter) {
+        throw new Error("你的帳號不在本次可投票名單中");
+      }
+      if (voter.authorized) {
+        throw new Error("你已經投過票了");
+      }
+      await tx.namedBallot.create({
+        data: {
           electionId: input.electionId,
-          email,
+          voterEmail: email,
+          candidateKey: input.candidateId,
+          receiptHash: input.receiptHash,
+        },
+      });
+      await tx.eligibleVoter.update({
+        where: { id: voter.id },
+        data: {
+          authorized: true,
+          authorizedAt: new Date(),
+        },
+      });
+      return;
+    }
+
+    const existing = await tx.namedBallot.findUnique({
+      where: {
+        electionId_voterEmail: {
+          electionId: input.electionId,
+          voterEmail: email,
         },
       },
     });
-    if (!voter) {
-      throw new Error("你的帳號不在本次可投票名單中");
-    }
-    if (voter.authorized) {
+    if (existing) {
       throw new Error("你已經投過票了");
     }
     await tx.namedBallot.create({
@@ -967,13 +1090,20 @@ export async function saveNamedBallot(input: {
         receiptHash: input.receiptHash,
       },
     });
-    await tx.eligibleVoter.update({
-      where: { id: voter.id },
-      data: {
-        authorized: true,
-        authorizedAt: new Date(),
+  });
+}
+
+export async function findNamedBallotByEmail(
+  electionId: string,
+  email: string,
+) {
+  return prisma.namedBallot.findUnique({
+    where: {
+      electionId_voterEmail: {
+        electionId,
+        voterEmail: normalizeEmail(email),
       },
-    });
+    },
   });
 }
 
@@ -1016,10 +1146,10 @@ export async function countSubmittedVotes(electionId: string): Promise<number> {
     where: { electionId },
     select: { votingMode: true },
   });
-  if (election?.votingMode === "named") {
+  if (election && isNamedBallotMode(election.votingMode)) {
     return prisma.namedBallot.count({ where: { electionId } });
   }
-  if (election?.votingMode === "open") {
+  if (election && isGuestOpenMode(election.votingMode)) {
     return prisma.guestBallot.count({ where: { electionId } });
   }
   return prisma.ballot.count({ where: { electionId } });
@@ -1049,12 +1179,17 @@ export async function saveTallyResult(
 }
 
 export function publicElectionView(state: ElectionState) {
-  const ballotCount =
-    state.votingMode === "named"
+  const ballotCount = isNamedBallotMode(state.votingMode)
+    ? state.namedBallots.length
+    : isGuestOpenMode(state.votingMode)
+      ? state.guestBallots.length
+      : state.ballots.length;
+  const authorizedCount = isGuestOpenMode(state.votingMode)
+    ? state.guestBallots.length
+    : isNamedBallotMode(state.votingMode) &&
+        !requiresEligibleList(state.votingMode)
       ? state.namedBallots.length
-      : state.votingMode === "open"
-        ? state.guestBallots.length
-        : state.ballots.length;
+      : state.voters.filter((v) => v.authorized).length;
   return {
     electionId: state.electionId,
     title: state.title,
@@ -1069,12 +1204,10 @@ export function publicElectionView(state: ElectionState) {
     candidates: state.candidates,
     createdAt: state.createdAt,
     stats: {
-      eligibleVoters:
-        state.votingMode === "open" ? 0 : state.voters.length,
-      authorizedCount:
-        state.votingMode === "open"
-          ? state.guestBallots.length
-          : state.voters.filter((v) => v.authorized).length,
+      eligibleVoters: requiresEligibleList(state.votingMode)
+        ? state.voters.length
+        : 0,
+      authorizedCount,
       ballotCount,
     },
     crypto: {
@@ -1099,12 +1232,11 @@ export function publicElectionView(state: ElectionState) {
 }
 
 export function electionSummary(state: ElectionState) {
-  const ballotCount =
-    state.votingMode === "named"
-      ? state.namedBallots.length
-      : state.votingMode === "open"
-        ? state.guestBallots.length
-        : state.ballots.length;
+  const ballotCount = isNamedBallotMode(state.votingMode)
+    ? state.namedBallots.length
+    : isGuestOpenMode(state.votingMode)
+      ? state.guestBallots.length
+      : state.ballots.length;
   return {
     electionId: state.electionId,
     title: state.title,
@@ -1117,8 +1249,9 @@ export function electionSummary(state: ElectionState) {
     createdByEmail: state.createdByEmail,
     managerEmails: state.managerEmails,
     candidateCount: state.candidates.length,
-    eligibleVoters:
-      state.votingMode === "open" ? 0 : state.voters.length,
+    eligibleVoters: requiresEligibleList(state.votingMode)
+      ? state.voters.length
+      : 0,
     ballotCount,
     createdAt: state.createdAt,
     hasResult: Boolean(state.tally),
