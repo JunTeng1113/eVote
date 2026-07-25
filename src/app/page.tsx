@@ -26,7 +26,7 @@ function ValueProposition({
           {description}
         </p>
       </div>
-      <div className="mx-auto w-full max-w-3xl">{preview}</div>
+      <div className="w-full">{preview}</div>
     </section>
   );
 }

@@ -1,32 +1,47 @@
+"use client";
+
 import type { ReactNode } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { Badge } from "@/components/ui/badge";
-import { ResultsPieChart } from "@/components/results-pie-chart";
-import { calcPct, formatPct } from "@/lib/results-ranking";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ResultsBreakdown } from "@/components/results-breakdown";
 import { cn } from "@/lib/utils";
 
-const POLL_DEMO = [
-  { id: "agree", label: "同意", value: 128 },
-  { id: "disagree", label: "不同意", value: 47 },
-  { id: "abstain", label: "棄權", value: 19 },
-] as const;
+const DEMO_TITLE = "社員大會提案表決";
+const DEMO_VOTE_URL = "https://evote.example/vote/demo";
+const DEMO_CANDIDATES = [
+  { id: "agree", name: "同意", party: "", imageUrl: null },
+  { id: "disagree", name: "不同意", party: "", imageUrl: null },
+  { id: "abstain", name: "棄權", party: "", imageUrl: null },
+];
+const DEMO_COUNTS: Record<string, number> = {
+  agree: 128,
+  disagree: 47,
+  abstain: 19,
+};
+const DEMO_TOTAL = 194;
 
 function SystemPreviewFrame({
   path,
   children,
   className,
+  bodyClassName,
 }: {
   path: string;
   children: ReactNode;
   className?: string;
+  bodyClassName?: string;
 }) {
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-[0_18px_40px_rgba(15,28,36,0.08)]",
+        "w-full overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-[0_18px_40px_rgba(15,28,36,0.08)]",
         className,
       )}
     >
-      <div className="flex items-center gap-2 border-b border-[var(--border)] bg-[rgba(11,79,108,0.06)] px-3 py-2">
+      <div className="flex items-center gap-2 border-b border-[var(--border)] bg-[rgba(11,79,108,0.06)] px-3 py-2 sm:px-4">
         <span className="h-2.5 w-2.5 rounded-full bg-[#d97706]/70" aria-hidden />
         <span className="h-2.5 w-2.5 rounded-full bg-[#1b7a6e]/70" aria-hidden />
         <span className="h-2.5 w-2.5 rounded-full bg-[#0b4f6c]/50" aria-hidden />
@@ -34,212 +49,275 @@ function SystemPreviewFrame({
           {path}
         </span>
       </div>
-      <div className="p-4 sm:p-5">{children}</div>
+      <div className={cn("p-4 sm:p-6 lg:p-8", bodyClassName)}>{children}</div>
     </div>
   );
 }
 
-function ResultBars({
-  items,
+function PreviewStepBadge({
+  step,
+  label,
+  state,
 }: {
-  items: ReadonlyArray<{ id: string; label: string; value: number }>;
+  step: number;
+  label: string;
+  state: "active" | "done" | "idle";
 }) {
-  const total = items.reduce((sum, item) => sum + item.value, 0);
   return (
-    <div className="space-y-3">
-      {items.map((item) => {
-        const pct = calcPct(item.value, total);
-        return (
-          <div key={item.id} className="space-y-1.5">
-            <div className="flex items-center justify-between gap-2 text-sm">
-              <span className="font-medium">{item.label}</span>
-              <span className="tabular-nums text-[var(--muted-foreground)]">
-                {item.value} 票（{formatPct(pct)}）
-              </span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-[var(--muted)]">
-              <div
-                className="h-full rounded-full bg-[var(--secondary)]"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-          </div>
-        );
-      })}
+    <div
+      className={cn(
+        "flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm",
+        state === "active"
+          ? "border-[var(--primary)] bg-[var(--muted)] text-[var(--foreground)]"
+          : state === "done"
+            ? "border-[var(--secondary)]/40 text-[var(--secondary)]"
+            : "border-[var(--border)] text-[var(--muted-foreground)]",
+      )}
+    >
+      <span className="font-semibold">{step}</span>
+      <span>{label}</span>
     </div>
   );
 }
 
-/** 建立投票流程預覽 */
+/** 建立投票流程預覽（對齊 /admin 建立新投票步驟 1） */
 export function CreateVoteSystemPreview() {
   return (
     <SystemPreviewFrame path="/admin · 建立投票">
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <h3 className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--primary)]">
-              建立新投票
-            </h3>
-            <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-              範例畫面 · 僅供首頁預覽
-            </p>
-          </div>
-          <Badge>分步驟</Badge>
+      <div className="space-y-6 rounded-xl border border-[var(--border)] bg-[rgba(255,255,255,0.88)] p-5 sm:p-6">
+        <div className="space-y-1.5">
+          <h3 className="font-[family-name:var(--font-display)] text-xl font-semibold text-[var(--primary)] sm:text-2xl">
+            建立新投票
+          </h3>
+          <p className="text-sm text-[var(--muted-foreground)]">
+            請依序完成三個階段後送出。
+          </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {[
-            { step: 1, label: "標題與說明", active: true },
-            { step: 2, label: "投票選項", active: false },
-            { step: 3, label: "可投票名單", active: false },
-          ].map((item) => (
-            <span
-              key={item.step}
-              className={cn(
-                "rounded-md border px-2.5 py-1 text-xs",
-                item.active
-                  ? "border-[var(--primary)] bg-[rgba(11,79,108,0.08)] font-medium text-[var(--primary)]"
-                  : "border-[var(--border)] text-[var(--muted-foreground)]",
-              )}
-            >
-              {item.step}. {item.label}
-            </span>
-          ))}
+          <PreviewStepBadge step={1} label="標題與說明" state="active" />
+          <PreviewStepBadge step={2} label="投票選項" state="idle" />
+          <PreviewStepBadge step={3} label="可投票名單" state="idle" />
         </div>
 
-        <div className="space-y-3 rounded-xl border border-[var(--border)] bg-[rgba(255,255,255,0.7)] p-3">
-          <div className="space-y-1.5">
-            <p className="text-xs text-[var(--muted-foreground)]">投票標題</p>
-            <div className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm">
-              社員大會提案表決
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>投票標題</Label>
+            <Input value={DEMO_TITLE} readOnly tabIndex={-1} />
+          </div>
+          <div className="space-y-2">
+            <Label>說明（選填）</Label>
+            <textarea
+              className="min-h-28 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
+              value="向投票權人說明這場投票的目的"
+              readOnly
+              tabIndex={-1}
+            />
+          </div>
+
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">投票方式</legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="flex items-start gap-3 rounded-lg border border-[var(--primary)] bg-[var(--muted)] px-3 py-3">
+                <span className="mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-[3px] border-[var(--primary)] bg-white" />
+                <span>
+                  <span className="block text-sm font-medium">不記名投票</span>
+                  <span className="mt-0.5 block text-xs text-[var(--muted-foreground)]">
+                    預設。需登入且在名單內；可確認有投票，但無法得知誰投了什麼。
+                  </span>
+                </span>
+              </div>
+              <div className="flex items-start gap-3 rounded-lg border border-[var(--border)] px-3 py-3 opacity-80">
+                <span className="mt-1 h-3.5 w-3.5 shrink-0 rounded-full border border-[var(--border)]" />
+                <span>
+                  <span className="block text-sm font-medium">記名（名單內）</span>
+                  <span className="mt-0.5 block text-xs text-[var(--muted-foreground)]">
+                    需登入且在名單內；開票後可對照每位投票權人的選擇。
+                  </span>
+                </span>
+              </div>
             </div>
-          </div>
-          <div className="space-y-1.5">
-            <p className="text-xs text-[var(--muted-foreground)]">說明</p>
-            <div className="min-h-14 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--muted-foreground)]">
-              請就本會提案進行表決…
+          </fieldset>
+
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">投票時間</legend>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="flex items-start gap-3 rounded-lg border border-[var(--primary)] bg-[var(--muted)] px-3 py-3">
+                <span className="mt-1 h-3.5 w-3.5 shrink-0 rounded-full border-[3px] border-[var(--primary)] bg-white" />
+                <span>
+                  <span className="block text-sm font-medium">無時間限制</span>
+                  <span className="mt-0.5 block text-xs text-[var(--muted-foreground)]">
+                          由管理員手動截止或恢復投票。
+                        </span>
+                </span>
+              </div>
+              <div className="flex items-start gap-3 rounded-lg border border-[var(--border)] px-3 py-3 opacity-80">
+                <span className="mt-1 h-3.5 w-3.5 shrink-0 rounded-full border border-[var(--border)]" />
+                <span>
+                  <span className="block text-sm font-medium">限時投票</span>
+                  <span className="mt-0.5 block text-xs text-[var(--muted-foreground)]">
+                    建立後立即開始，到時自動截止。
+                  </span>
+                </span>
+              </div>
+              <div className="flex items-start gap-3 rounded-lg border border-[var(--border)] px-3 py-3 opacity-80 sm:col-span-2 lg:col-span-1">
+                <span className="mt-1 h-3.5 w-3.5 shrink-0 rounded-full border border-[var(--border)]" />
+                <span>
+                  <span className="block text-sm font-medium">計時投票</span>
+                  <span className="mt-0.5 block text-xs text-[var(--muted-foreground)]">
+                    設定開始與截止時間，到期自動截止。
+                  </span>
+                </span>
+              </div>
             </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge>匿名投票</Badge>
-            <Badge>無時間限制</Badge>
-          </div>
+          </fieldset>
         </div>
 
         <div className="flex justify-end">
-          <span className="rounded-md bg-[var(--primary)] px-3 py-1.5 text-xs font-medium text-[var(--primary-foreground)]">
+          <Button type="button" tabIndex={-1}>
             下一步
-          </span>
+          </Button>
         </div>
       </div>
     </SystemPreviewFrame>
   );
 }
 
-/** 全螢幕／螢幕分享投影預覽 */
+/** 全螢幕現場投影預覽（對齊實際投影畫面） */
 export function ProjectionSystemPreview() {
+  const options = DEMO_CANDIDATES;
+
   return (
-    <SystemPreviewFrame path="/admin · 全螢幕投影">
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <h3 className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--primary)]">
-              eVote 現場投影
-            </h3>
-            <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-              範例畫面 · 僅供首頁預覽
-            </p>
-          </div>
-          <Badge>螢幕分享</Badge>
-        </div>
-
-        <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[linear-gradient(180deg,#f7fbfc_0%,#eef5f7_100%)] p-4 sm:p-5">
-          <div className="flex items-center justify-between gap-2 text-xs text-[var(--muted-foreground)]">
-            <span>eVote 現場投影</span>
-            <span className="rounded-md border border-[var(--border)] bg-white px-2 py-0.5">
+    <SystemPreviewFrame path="/admin · 全螢幕投影" bodyClassName="p-0 sm:p-0 lg:p-0">
+      <div className="bg-[linear-gradient(180deg,#f7fbfc_0%,#eef5f7_100%)] px-5 py-6 sm:px-8 sm:py-8 lg:px-10">
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-sm font-medium tracking-wide text-[#0b4f6c]">
+            eVote 現場投影
+          </p>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" size="sm" tabIndex={-1}>
               結束全螢幕
-            </span>
-          </div>
-
-          <div className="mt-5 text-center">
-            <p className="font-[family-name:var(--font-display)] text-xl font-semibold text-[var(--foreground)] sm:text-2xl">
-              社員大會提案表決
-            </p>
-            <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-              請掃描 QR Code 或開啟投票連結參與
-            </p>
-          </div>
-
-          <div className="mt-6 grid items-center gap-5 sm:grid-cols-[auto_1fr]">
-            <div className="mx-auto flex h-28 w-28 items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-white sm:mx-0">
-              <div className="grid h-20 w-20 grid-cols-4 grid-rows-4 gap-0.5 p-1">
-                {Array.from({ length: 16 }, (_, index) => (
-                  <span
-                    key={index}
-                    className={cn(
-                      "rounded-[1px]",
-                      [0, 1, 2, 4, 5, 8, 10, 12, 13, 14].includes(index)
-                        ? "bg-[var(--foreground)]"
-                        : "bg-transparent",
-                    )}
-                  />
-                ))}
-              </div>
-            </div>
-            <div className="space-y-3 text-center sm:text-left">
-              <div>
-                <p className="text-xs tracking-[0.18em] text-[var(--muted-foreground)]">
-                  目前階段
-                </p>
-                <p className="font-[family-name:var(--font-display)] text-4xl font-semibold text-[var(--secondary)]">
-                  投票中
-                </p>
-              </div>
-              <p className="text-sm text-[var(--muted-foreground)]">
-                已收到 <span className="font-semibold text-[var(--foreground)]">86</span>{" "}
-                票
-              </p>
-              <div className="flex flex-wrap justify-center gap-2 sm:justify-start">
-                {["同意", "不同意", "棄權"].map((label) => (
-                  <span
-                    key={label}
-                    className="rounded-md border border-[var(--border)] bg-white px-2.5 py-1 text-xs"
-                  >
-                    {label}
-                  </span>
-                ))}
-              </div>
-            </div>
+            </Button>
           </div>
         </div>
+
+        <header className="mt-6 space-y-2 text-center">
+          <h3 className="font-[family-name:var(--font-display)] text-2xl font-semibold leading-tight text-[#0f1c24] sm:text-3xl lg:text-4xl">
+            {DEMO_TITLE}
+          </h3>
+          <p className="mx-auto max-w-2xl text-sm text-[#4d6470] sm:text-base">
+            請就本會提案進行表決
+          </p>
+        </header>
+
+        <div className="my-8 flex flex-col items-center justify-center gap-8 text-center lg:flex-row lg:items-center lg:gap-12 lg:text-left">
+          <div className="relative flex flex-col items-center gap-3 lg:items-start">
+            <p className="text-sm font-medium tracking-[0.2em] text-[#4d6470]">
+              目前階段
+            </p>
+            <p className="font-[family-name:var(--font-display)] text-5xl font-semibold tracking-tight text-[var(--secondary)] sm:text-6xl md:text-7xl">
+              投票中
+            </p>
+          </div>
+
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-[rgba(15,28,36,0.12)] bg-white/90 px-6 py-5">
+            <QRCodeSVG
+              value={DEMO_VOTE_URL}
+              size={180}
+              level="M"
+              bgColor="#ffffff"
+              fgColor="#0f1c24"
+              title="投票連結 QR Code"
+            />
+            <p className="text-sm font-medium text-[#0b4f6c]">掃描即可投票</p>
+            <p className="max-w-[220px] break-all text-center text-xs text-[#4d6470]">
+              {DEMO_VOTE_URL}
+            </p>
+          </div>
+        </div>
+
+        <section>
+          <h4 className="mb-4 text-center text-sm font-medium uppercase tracking-wide text-[#4d6470]">
+            投票選項（{options.length}）
+          </h4>
+          <ul className="grid gap-3 sm:grid-cols-3">
+            {options.map((option, index) => (
+              <li
+                key={option.id}
+                className="flex items-center gap-3 rounded-xl border border-[rgba(15,28,36,0.12)] bg-white/80 px-4 py-3"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[rgba(11,79,108,0.08)] text-sm font-semibold tabular-nums text-[#0b4f6c]">
+                  {index + 1}
+                </span>
+                <div className="min-w-0">
+                  <div className="truncate text-lg font-medium">{option.name}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <footer className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-[rgba(15,28,36,0.12)] pt-6">
+          <p className="text-base text-[#4d6470]">
+            已收到{" "}
+            <span className="font-semibold tabular-nums text-[#0f1c24]">86</span>{" "}
+            票
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" tabIndex={-1}>
+              截止投票
+            </Button>
+            <Button type="button" size="sm" variant="outline" tabIndex={-1}>
+              開票
+            </Button>
+          </div>
+        </footer>
       </div>
     </SystemPreviewFrame>
   );
 }
 
-/** 開票結果預覽 */
+/** 開票結果預覽（對齊 /results 結果卡） */
 export function ResultsSystemPreview() {
-  const pollTotal = POLL_DEMO.reduce((sum, item) => sum + item.value, 0);
-
   return (
-    <SystemPreviewFrame path="/results · 預覽">
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <h3 className="font-[family-name:var(--font-display)] text-lg font-semibold text-[var(--primary)]">
-              社員大會提案表決
-            </h3>
-            <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-              範例資料 · 僅供首頁預覽
-            </p>
-          </div>
-          <Badge>議案投票</Badge>
+    <SystemPreviewFrame path="/results · 開票結果">
+      <div className="space-y-6 rounded-xl border border-[var(--border)] bg-[rgba(255,255,255,0.88)] p-5 sm:p-6">
+        <div className="space-y-2">
+          <h3 className="font-[family-name:var(--font-display)] text-xl font-semibold text-[var(--primary)] sm:text-2xl">
+            {DEMO_TITLE}
+          </h3>
+          <p className="text-sm text-[var(--muted-foreground)]">
+            狀態 <Badge>已開票</Badge> · <Badge>不記名</Badge> ·{" "}
+            <Badge>無時間限制</Badge>
+          </p>
         </div>
-        <ResultsPieChart items={[...POLL_DEMO]} />
-        <ResultBars items={POLL_DEMO} />
-        <p className="text-xs text-[var(--muted-foreground)]">
-          有效票數 {pollTotal} · 同意／不同意／棄權
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border border-[var(--border)] px-4 py-3">
+            <div className="text-xs text-[var(--muted-foreground)]">投票權人數</div>
+            <div className="mt-1 text-2xl font-semibold tabular-nums">220</div>
+          </div>
+          <div className="rounded-lg border border-[var(--border)] px-4 py-3">
+            <div className="text-xs text-[var(--muted-foreground)]">有效票數</div>
+            <div className="mt-1 text-2xl font-semibold tabular-nums">
+              {DEMO_TOTAL}
+            </div>
+          </div>
+          <div className="rounded-lg border border-[var(--border)] px-4 py-3">
+            <div className="text-xs text-[var(--muted-foreground)]">投票率</div>
+            <div className="mt-1 text-2xl font-semibold tabular-nums">88%</div>
+          </div>
+        </div>
+
+        <p className="text-sm text-[var(--muted-foreground)]">
+          開票時間：2026/07/25 18:00
         </p>
+
+        <ResultsBreakdown
+          candidates={DEMO_CANDIDATES}
+          counts={DEMO_COUNTS}
+          total={DEMO_TOTAL}
+        />
       </div>
     </SystemPreviewFrame>
   );
