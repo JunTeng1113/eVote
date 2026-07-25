@@ -1,11 +1,5 @@
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { ResultsPieChart } from "@/components/results-pie-chart";
 import { calcPct, formatPct } from "@/lib/results-ranking";
 
@@ -91,36 +85,28 @@ function ResultBars({
 
 export function HomeResultPreviews() {
   const pollTotal = POLL_DEMO.reduce((sum, item) => sum + item.value, 0);
-  const electionTotal = ELECTION_DEMO.reduce((sum, item) => sum + item.value, 0);
+  const electionTotal = ELECTION_DEMO.reduce(
+    (sum, item) => sum + item.value,
+    0,
+  );
 
   return (
-    <section className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>結果頁預覽</CardTitle>
-          <CardDescription>
-            開票後會以圖表呈現各選項得票。以下為示意圖，非真實投票。
-          </CardDescription>
-        </CardHeader>
-      </Card>
+    <div className="grid gap-5 lg:grid-cols-2">
+      <PreviewFrame title="社員大會提案表決" modeLabel="議案投票">
+        <ResultsPieChart items={[...POLL_DEMO]} />
+        <ResultBars items={POLL_DEMO} />
+        <p className="text-xs text-[var(--muted-foreground)]">
+          有效票數 {pollTotal} · 同意／不同意／棄權
+        </p>
+      </PreviewFrame>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <PreviewFrame title="社員大會提案表決" modeLabel="議案投票">
-          <ResultsPieChart items={[...POLL_DEMO]} />
-          <ResultBars items={POLL_DEMO} />
-          <p className="text-xs text-[var(--muted-foreground)]">
-            有效票數 {pollTotal} · 同意／不同意／棄權
-          </p>
-        </PreviewFrame>
-
-        <PreviewFrame title="第 12 屆會長選舉" modeLabel="選舉">
-          <ResultsPieChart items={[...ELECTION_DEMO]} />
-          <ResultBars items={ELECTION_DEMO} />
-          <p className="text-xs text-[var(--muted-foreground)]">
-            有效票數 {electionTotal} · 1號候選人／2號候選人／棄權
-          </p>
-        </PreviewFrame>
-      </div>
-    </section>
+      <PreviewFrame title="第 12 屆會長選舉" modeLabel="選舉">
+        <ResultsPieChart items={[...ELECTION_DEMO]} />
+        <ResultBars items={ELECTION_DEMO} />
+        <p className="text-xs text-[var(--muted-foreground)]">
+          有效票數 {electionTotal} · 1號候選人／2號候選人／棄權
+        </p>
+      </PreviewFrame>
+    </div>
   );
 }

@@ -80,3 +80,49 @@ body {
     animation: none;
   }
 }
+
+@keyframes home-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes home-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.home-fade-up {
+  animation: home-fade-up 0.7s ease-out both;
+}
+
+.home-fade-up-delay-1 {
+  animation-delay: 0.1s;
+}
+
+.home-fade-up-delay-2 {
+  animation-delay: 0.2s;
+}
+
+.home-float {
+  animation: home-float 5.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-fade-up,
+  .home-fade-up-delay-1,
+  .home-fade-up-delay-2,
+  .home-float {
+    animation: none;
+  }
+}

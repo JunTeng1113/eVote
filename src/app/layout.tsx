@@ -21,7 +21,7 @@ const body = Manrope({
 
 export const metadata: Metadata = {
   title: "eVote｜線上投票",
-  description: "使用 Google 帳號登入的匿名線上投票系統",
+  description: "讓每個人快速建立匿名、便利的電子投票。",
 };
 
 export default function RootLayout({
