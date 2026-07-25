@@ -2,11 +2,13 @@
 
 import type { ReactNode } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { VolumeX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ResultsBreakdown } from "@/components/results-breakdown";
+import { VotingWaveBackdrop } from "@/components/election-projection-view";
 import { cn } from "@/lib/utils";
 
 const DEMO_TITLE = "社員大會提案表決";
@@ -28,11 +30,13 @@ function SystemPreviewFrame({
   children,
   className,
   bodyClassName,
+  showChrome = true,
 }: {
-  path: string;
+  path?: string;
   children: ReactNode;
   className?: string;
   bodyClassName?: string;
+  showChrome?: boolean;
 }) {
   return (
     <div
@@ -41,14 +45,16 @@ function SystemPreviewFrame({
         className,
       )}
     >
-      <div className="flex items-center gap-2 border-b border-[var(--border)] bg-[rgba(11,79,108,0.06)] px-3 py-2 sm:px-4">
-        <span className="h-2.5 w-2.5 rounded-full bg-[#d97706]/70" aria-hidden />
-        <span className="h-2.5 w-2.5 rounded-full bg-[#1b7a6e]/70" aria-hidden />
-        <span className="h-2.5 w-2.5 rounded-full bg-[#0b4f6c]/50" aria-hidden />
-        <span className="ml-2 truncate text-xs text-[var(--muted-foreground)]">
-          {path}
-        </span>
-      </div>
+      {showChrome && path ? (
+        <div className="flex items-center gap-2 border-b border-[var(--border)] bg-[rgba(11,79,108,0.06)] px-3 py-2 sm:px-4">
+          <span className="h-2.5 w-2.5 rounded-full bg-[#d97706]/70" aria-hidden />
+          <span className="h-2.5 w-2.5 rounded-full bg-[#1b7a6e]/70" aria-hidden />
+          <span className="h-2.5 w-2.5 rounded-full bg-[#0b4f6c]/50" aria-hidden />
+          <span className="ml-2 truncate text-xs text-[var(--muted-foreground)]">
+            {path}
+          </span>
+        </div>
+      ) : null}
       <div className={cn("p-4 sm:p-6 lg:p-8", bodyClassName)}>{children}</div>
     </div>
   );
@@ -188,13 +194,22 @@ export function ProjectionSystemPreview() {
   const options = DEMO_CANDIDATES;
 
   return (
-    <SystemPreviewFrame path="/admin · 全螢幕投影" bodyClassName="p-0 sm:p-0 lg:p-0">
+    <SystemPreviewFrame showChrome={false} bodyClassName="p-0 sm:p-0 lg:p-0">
       <div className="bg-[linear-gradient(180deg,#f7fbfc_0%,#eef5f7_100%)] px-5 py-6 sm:px-8 sm:py-8 lg:px-10">
         <div className="flex items-center justify-between gap-4">
           <p className="text-sm font-medium tracking-wide text-[#0b4f6c]">
             eVote 現場投影
           </p>
           <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              tabIndex={-1}
+              aria-label="背景音樂"
+            >
+              <VolumeX className="h-4 w-4" aria-hidden />
+            </Button>
             <Button type="button" variant="outline" size="sm" tabIndex={-1}>
               結束全螢幕
             </Button>
@@ -212,10 +227,11 @@ export function ProjectionSystemPreview() {
 
         <div className="my-8 flex flex-col items-center justify-center gap-8 text-center lg:flex-row lg:items-center lg:gap-12 lg:text-left">
           <div className="relative flex flex-col items-center gap-3 lg:items-start">
-            <p className="text-sm font-medium tracking-[0.2em] text-[#4d6470]">
+            <VotingWaveBackdrop />
+            <p className="relative z-[1] text-sm font-medium tracking-[0.2em] text-[#4d6470]">
               目前階段
             </p>
-            <p className="font-[family-name:var(--font-display)] text-5xl font-semibold tracking-tight text-[var(--secondary)] sm:text-6xl md:text-7xl">
+            <p className="relative z-[1] font-[family-name:var(--font-display)] text-5xl font-semibold tracking-tight text-[#0b4f6c] sm:text-6xl md:text-7xl">
               投票中
             </p>
           </div>
@@ -263,14 +279,9 @@ export function ProjectionSystemPreview() {
             <span className="font-semibold tabular-nums text-[#0f1c24]">86</span>{" "}
             票
           </p>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" tabIndex={-1}>
-              截止投票
-            </Button>
-            <Button type="button" size="sm" variant="outline" tabIndex={-1}>
-              開票
-            </Button>
-          </div>
+          <Button type="button" size="sm" tabIndex={-1}>
+            截止投票
+          </Button>
         </footer>
       </div>
     </SystemPreviewFrame>

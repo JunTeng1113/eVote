@@ -115,7 +115,7 @@ function useReveal(resetKey: string, delayMs = 80) {
   return stage;
 }
 
-function VotingWaveBackdrop() {
+export function VotingWaveBackdrop() {
   return (
     <div
       className="evote-voting-wave-bob pointer-events-none absolute inset-x-[-35%] top-[68%] h-52 -translate-y-1/2 overflow-hidden opacity-70 sm:h-72 md:h-80"
