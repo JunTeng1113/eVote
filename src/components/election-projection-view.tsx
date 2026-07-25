@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ProjectionBgmButton } from "@/components/projection-bgm-button";
 import { buildVoteShareUrl } from "@/lib/election-share";
 import { readResponseJson } from "@/lib/read-response-json";
+import { cn } from "@/lib/utils";
 
 export type ProjectionElection = {
   electionId: string;
@@ -115,10 +116,13 @@ function useReveal(resetKey: string, delayMs = 80) {
   return stage;
 }
 
-export function VotingWaveBackdrop() {
+export function VotingWaveBackdrop({ className }: { className?: string }) {
   return (
     <div
-      className="evote-voting-wave-bob pointer-events-none absolute inset-x-[-35%] top-[68%] h-52 -translate-y-1/2 overflow-hidden opacity-70 sm:h-72 md:h-80"
+      className={cn(
+        "evote-voting-wave-bob pointer-events-none absolute inset-x-[-35%] top-[68%] h-52 -translate-y-1/2 overflow-hidden opacity-70 sm:h-72 md:h-80",
+        className,
+      )}
       aria-hidden
     >
       <div className="evote-voting-wave-track absolute inset-y-0 left-0 flex w-[200%]">

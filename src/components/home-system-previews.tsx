@@ -26,17 +26,13 @@ const DEMO_COUNTS: Record<string, number> = {
 const DEMO_TOTAL = 194;
 
 function SystemPreviewFrame({
-  path,
   children,
   className,
   bodyClassName,
-  showChrome = true,
 }: {
-  path?: string;
   children: ReactNode;
   className?: string;
   bodyClassName?: string;
-  showChrome?: boolean;
 }) {
   return (
     <div
@@ -45,16 +41,6 @@ function SystemPreviewFrame({
         className,
       )}
     >
-      {showChrome && path ? (
-        <div className="flex items-center gap-2 border-b border-[var(--border)] bg-[rgba(11,79,108,0.06)] px-3 py-2 sm:px-4">
-          <span className="h-2.5 w-2.5 rounded-full bg-[#d97706]/70" aria-hidden />
-          <span className="h-2.5 w-2.5 rounded-full bg-[#1b7a6e]/70" aria-hidden />
-          <span className="h-2.5 w-2.5 rounded-full bg-[#0b4f6c]/50" aria-hidden />
-          <span className="ml-2 truncate text-xs text-[var(--muted-foreground)]">
-            {path}
-          </span>
-        </div>
-      ) : null}
       <div className={cn("p-4 sm:p-6 lg:p-8", bodyClassName)}>{children}</div>
     </div>
   );
@@ -89,7 +75,7 @@ function PreviewStepBadge({
 /** 建立投票流程預覽（對齊 /admin 建立新投票步驟 1） */
 export function CreateVoteSystemPreview() {
   return (
-    <SystemPreviewFrame path="/admin · 建立投票">
+    <SystemPreviewFrame>
       <div className="space-y-6 rounded-xl border border-[var(--border)] bg-[rgba(255,255,255,0.88)] p-5 sm:p-6">
         <div className="space-y-1.5">
           <h3 className="font-[family-name:var(--font-display)] text-xl font-semibold text-[var(--primary)] sm:text-2xl">
@@ -194,7 +180,7 @@ export function ProjectionSystemPreview() {
   const options = DEMO_CANDIDATES;
 
   return (
-    <SystemPreviewFrame showChrome={false} bodyClassName="p-0 sm:p-0 lg:p-0">
+    <SystemPreviewFrame bodyClassName="p-0 sm:p-0 lg:p-0">
       <div className="bg-[linear-gradient(180deg,#f7fbfc_0%,#eef5f7_100%)] px-5 py-6 sm:px-8 sm:py-8 lg:px-10">
         <div className="flex items-center justify-between gap-4">
           <p className="text-sm font-medium tracking-wide text-[#0b4f6c]">
@@ -225,30 +211,32 @@ export function ProjectionSystemPreview() {
           </p>
         </header>
 
-        <div className="my-8 flex flex-col items-center justify-center gap-8 text-center lg:flex-row lg:items-center lg:gap-12 lg:text-left">
-          <div className="relative flex flex-col items-center gap-3 lg:items-start">
-            <VotingWaveBackdrop />
-            <p className="relative z-[1] text-sm font-medium tracking-[0.2em] text-[#4d6470]">
-              目前階段
-            </p>
-            <p className="relative z-[1] font-[family-name:var(--font-display)] text-5xl font-semibold tracking-tight text-[#0b4f6c] sm:text-6xl md:text-7xl">
-              投票中
-            </p>
-          </div>
+        <div className="relative my-8 py-6 sm:py-8">
+          <VotingWaveBackdrop className="inset-x-[-1.25rem] top-1/2 h-44 -translate-y-1/2 sm:inset-x-[-2rem] sm:h-56 md:h-64 lg:inset-x-[-2.5rem]" />
+          <div className="relative z-[1] flex flex-col items-center justify-center gap-8 text-center lg:flex-row lg:items-center lg:gap-12 lg:text-left">
+            <div className="relative flex min-h-[7.5rem] flex-col items-center justify-center gap-3 lg:min-w-[12rem] lg:items-start">
+              <p className="relative z-[1] text-sm font-medium tracking-[0.2em] text-[#4d6470]">
+                目前階段
+              </p>
+              <p className="relative z-[1] font-[family-name:var(--font-display)] text-5xl font-semibold tracking-tight text-[#0b4f6c] sm:text-6xl md:text-7xl">
+                投票中
+              </p>
+            </div>
 
-          <div className="flex flex-col items-center gap-3 rounded-2xl border border-[rgba(15,28,36,0.12)] bg-white/90 px-6 py-5">
-            <QRCodeSVG
-              value={DEMO_VOTE_URL}
-              size={180}
-              level="M"
-              bgColor="#ffffff"
-              fgColor="#0f1c24"
-              title="投票連結 QR Code"
-            />
-            <p className="text-sm font-medium text-[#0b4f6c]">掃描即可投票</p>
-            <p className="max-w-[220px] break-all text-center text-xs text-[#4d6470]">
-              {DEMO_VOTE_URL}
-            </p>
+            <div className="flex flex-col items-center gap-3 rounded-2xl border border-[rgba(15,28,36,0.12)] bg-white/90 px-6 py-5">
+              <QRCodeSVG
+                value={DEMO_VOTE_URL}
+                size={180}
+                level="M"
+                bgColor="#ffffff"
+                fgColor="#0f1c24"
+                title="投票連結 QR Code"
+              />
+              <p className="text-sm font-medium text-[#0b4f6c]">掃描即可投票</p>
+              <p className="max-w-[220px] break-all text-center text-xs text-[#4d6470]">
+                {DEMO_VOTE_URL}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -291,7 +279,7 @@ export function ProjectionSystemPreview() {
 /** 開票結果預覽（對齊 /results 結果卡） */
 export function ResultsSystemPreview() {
   return (
-    <SystemPreviewFrame path="/results · 開票結果">
+    <SystemPreviewFrame>
       <div className="space-y-6 rounded-xl border border-[var(--border)] bg-[rgba(255,255,255,0.88)] p-5 sm:p-6">
         <div className="space-y-2">
           <h3 className="font-[family-name:var(--font-display)] text-xl font-semibold text-[var(--primary)] sm:text-2xl">
