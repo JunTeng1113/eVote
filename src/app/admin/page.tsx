@@ -36,8 +36,10 @@ import { buildVoteShareMessage, buildVoteShareUrl } from "@/lib/election-share";
 import { readResponseJson } from "@/lib/read-response-json";
 import { calcPct, formatPct, formatTalliedAt } from "@/lib/results-ranking";
 import { CopyVoteLinkButton } from "@/components/copy-vote-link-button";
+import { VoterEmailsFileImport } from "@/components/voter-emails-file-import";
 import { useConfirmDialog } from "@/components/confirm-dialog";
 import { AdminPageSkeleton } from "@/components/loading-skeletons";
+import { mergeEmailsIntoDraft } from "@/lib/voter-file-import";
 import {
   ListPagination,
   LIST_PAGE_SIZE,
@@ -250,6 +252,27 @@ function newDraftCandidate(
   };
 }
 
+const DEFAULT_ABSTAIN_NAME = "棄權";
+
+/** 建立投票的預設選項：兩個空白欄位，末尾為可移除的「棄權」。 */
+function defaultDraftCandidates(): DraftCandidate[] {
+  return [
+    newDraftCandidate(),
+    newDraftCandidate(),
+    newDraftCandidate({ name: DEFAULT_ABSTAIN_NAME }),
+  ];
+}
+
+/** 新增空白選項；若最後一項仍是預設「棄權」，插在其前面以保持棄權為末項。 */
+function appendDraftCandidate(prev: DraftCandidate[]): DraftCandidate[] {
+  const blank = newDraftCandidate();
+  const last = prev[prev.length - 1];
+  if (last && last.name.trim() === DEFAULT_ABSTAIN_NAME) {
+    return [...prev.slice(0, -1), blank, last];
+  }
+  return [...prev, blank];
+}
+
 function toDatetimeLocalValue(iso: string | null | undefined): string {
   if (!iso) {
     return "";
@@ -360,10 +383,9 @@ export default function AdminPage() {
   const [audit, setAudit] = useState<AuditResult | null>(null);
   const [changeLogs, setChangeLogs] = useState<ChangeLogRow[]>([]);
   const [changeLogsLoading, setChangeLogsLoading] = useState(false);
-  const [draftCandidates, setDraftCandidates] = useState<DraftCandidate[]>([
-    newDraftCandidate(),
-    newDraftCandidate(),
-  ]);
+  const [draftCandidates, setDraftCandidates] = useState<DraftCandidate[]>(
+    defaultDraftCandidates,
+  );
   const [bulkCandidatesDraft, setBulkCandidatesDraft] = useState("");
   const [showBulkCandidates, setShowBulkCandidates] = useState(false);
   const [voterEmailsDraft, setVoterEmailsDraft] = useState("");
@@ -564,7 +586,7 @@ export default function AdminPage() {
       durationValue: 3,
       durationUnit: "minutes",
     });
-    setDraftCandidates([newDraftCandidate(), newDraftCandidate()]);
+    setDraftCandidates(defaultDraftCandidates());
     setBulkCandidatesDraft("");
     setShowBulkCandidates(false);
     setVoterEmailsDraft("");
@@ -1628,10 +1650,7 @@ export default function AdminPage() {
                       size="sm"
                       variant="outline"
                       onClick={() =>
-                        setDraftCandidates((prev) => [
-                          ...prev,
-                          newDraftCandidate(),
-                        ])
+                        setDraftCandidates((prev) => appendDraftCandidate(prev))
                       }
                     >
                       新增選項
@@ -1800,7 +1819,17 @@ export default function AdminPage() {
                 </div>
                 {requiresEligibleList(votingMode) ? (
                   <div className="space-y-2">
-                    <Label htmlFor="voterEmailsDraft">此場可投票 Email</Label>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Label htmlFor="voterEmailsDraft">此場可投票 Email</Label>
+                      <VoterEmailsFileImport
+                        disabled={busy}
+                        onImported={(emails) => {
+                          setVoterEmailsDraft((prev) =>
+                            mergeEmailsIntoDraft(prev, emails),
+                          );
+                        }}
+                      />
+                    </div>
                     <textarea
                       id="voterEmailsDraft"
                       className="min-h-36 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
@@ -1811,7 +1840,7 @@ export default function AdminPage() {
                       }
                     />
                     <p className="text-xs text-[var(--muted-foreground)]">
-                      可先空白，建立後再於「查看投票列表」補上。此名單只屬於這一場。
+                      可先空白，建立後再於「查看投票列表」補上。此名單只屬於這一場。也可從檔案匯入 Email。
                     </p>
                   </div>
                 ) : votingMode === "named_open" ? (
@@ -2252,7 +2281,20 @@ export default function AdminPage() {
                       onSubmit={emailsForm.handleSubmit(onAddEmails)}
                     >
                       <div className="space-y-2">
-                        <Label htmlFor="emails">新增 Email</Label>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <Label htmlFor="emails">新增 Email</Label>
+                          <VoterEmailsFileImport
+                            disabled={busy}
+                            onImported={(emails) => {
+                              const current = emailsForm.getValues("emails");
+                              emailsForm.setValue(
+                                "emails",
+                                mergeEmailsIntoDraft(current, emails),
+                                { shouldDirty: true, shouldValidate: true },
+                              );
+                            }}
+                          />
+                        </div>
                         <textarea
                           id="emails"
                           className="min-h-24 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
