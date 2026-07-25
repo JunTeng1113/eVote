@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Manrope, Sora } from "next/font/google";
 import { SiteHeader } from "@/components/site-header";
+import { SiteBreadcrumb } from "@/components/site-breadcrumb";
 import { AuthSessionProvider } from "@/components/auth-session-provider";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
@@ -33,6 +34,7 @@ export default function RootLayout({
         <AuthSessionProvider>
           <SiteHeader />
           <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
+            <SiteBreadcrumb />
             {children}
           </main>
           <footer className="border-t border-[var(--border)]/70 py-6 text-center text-xs text-[var(--muted-foreground)]">
