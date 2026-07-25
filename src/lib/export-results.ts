@@ -1,4 +1,4 @@
-import { jsPDF } from "jspdf";
+import type { jsPDF } from "jspdf";
 import {
   RESULT_PALETTE,
   calcPct,
@@ -424,6 +424,7 @@ export async function exportResultsPdfA4(
   input: ResultExportInput,
   orientation: PdfOrientation = "portrait",
 ): Promise<void> {
+  const { jsPDF } = await import("jspdf");
   const size = A4_PX[orientation];
   const layout: LayoutKind =
     orientation === "landscape" ? "landscape" : "portrait";

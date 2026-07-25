@@ -19,23 +19,56 @@ import {
   LIST_PAGE_SIZE,
   slicePage,
 } from "@/components/list-pagination";
-import {
-  exportResultsPdfA4,
-  exportResultsPng,
-  type PdfOrientation,
-  type PngExportRatio,
-  type ResultExportInput,
+import type {
+  PdfOrientation,
+  PngExportRatio,
+  ResultExportInput,
 } from "@/lib/export-results";
 import { calcPct, formatPct, formatTalliedAt } from "@/lib/results-ranking";
 import { readResponseJson } from "@/lib/read-response-json";
-import { ResultsProjectionView } from "@/components/results-projection-view";
 import { ProjectionFullscreenRoot } from "@/components/projection-fullscreen-root";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
   isNamedBallotMode,
   requiresEligibleList,
   votingModeLabel,
 } from "@/lib/voting-mode";
+import dynamic from "next/dynamic";
+
+const ResultsProjectionView = dynamic(
+  () =>
+    import("@/components/results-projection-view").then((m) => ({
+      default: m.ResultsProjectionView,
+    })),
+  { ssr: false },
+);
+
+type ExportKind =
+  | "pdf"
+  | "pdf-landscape"
+  | "png16"
+  | "png43"
+  | "png916"
+  | "png34";
+
+const EXPORT_OPTIONS: Array<{
+  kind: ExportKind;
+  group: "PDF" | "PNG";
+  label: string;
+}> = [
+  { kind: "pdf", group: "PDF", label: "A4 直向" },
+  { kind: "pdf-landscape", group: "PDF", label: "A4 橫向" },
+  { kind: "png16", group: "PNG", label: "16:9" },
+  { kind: "png43", group: "PNG", label: "4:3" },
+  { kind: "png916", group: "PNG", label: "9:16" },
+  { kind: "png34", group: "PNG", label: "3:4" },
+];
 
 type ElectionResult = {
   electionId: string;
@@ -129,6 +162,7 @@ function ResultsContent() {
   const [exporting, setExporting] = useState(false);
   const [namedPage, setNamedPage] = useState(1);
   const [projectionOpen, setProjectionOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   async function load(id: string) {
     setLoading(true);
@@ -190,18 +224,9 @@ function ResultsContent() {
     setProjectionOpen(true);
   }, [openProjectionParam, selected?.tallyDetail]);
 
-  async function runExport(
-    kind:
-      | "pdf"
-      | "pdf-landscape"
-      | "png16"
-      | "png43"
-      | "png916"
-      | "png34",
-    payload: ResultExportInput,
-  ) {
+  async function runExport(kind: ExportKind, payload: ResultExportInput) {
     setExporting(true);
-    const labels: Record<typeof kind, string> = {
+    const labels: Record<ExportKind, string> = {
       pdf: "PDF（A4 直向）",
       "pdf-landscape": "PDF（A4 橫向）",
       png16: "PNG（16:9）",
@@ -209,6 +234,9 @@ function ResultsContent() {
       png916: "PNG（9:16）",
       png34: "PNG（3:4）",
     };
+    const { exportResultsPdfA4, exportResultsPng } = await import(
+      "@/lib/export-results"
+    );
     const ok =
       kind === "pdf" || kind === "pdf-landscape"
         ? await exportResultsPdfA4(
@@ -238,6 +266,7 @@ function ResultsContent() {
       toast.error("匯出失敗，請稍後再試");
       return;
     }
+    setExportOpen(false);
     toast.success(`已下載 ${labels[kind]}`);
   }
 
@@ -317,56 +346,58 @@ function ResultsContent() {
             </Button>
           ) : null}
           {exportInput ? (
-            <>
-              <Button
-                variant="outline"
-                disabled={exporting}
-                onClick={() => void runExport("pdf", exportInput)}
-              >
-                匯出 PDF（A4 直向）
-              </Button>
-              <Button
-                variant="outline"
-                disabled={exporting}
-                onClick={() => void runExport("pdf-landscape", exportInput)}
-              >
-                匯出 PDF（A4 橫向）
-              </Button>
-              <Button
-                variant="outline"
-                disabled={exporting}
-                onClick={() => void runExport("png16", exportInput)}
-              >
-                匯出 PNG（16:9）
-              </Button>
-              <Button
-                variant="outline"
-                disabled={exporting}
-                onClick={() => void runExport("png43", exportInput)}
-              >
-                匯出 PNG（4:3）
-              </Button>
-              <Button
-                variant="outline"
-                disabled={exporting}
-                onClick={() => void runExport("png916", exportInput)}
-              >
-                匯出 PNG（9:16）
-              </Button>
-              <Button
-                variant="outline"
-                disabled={exporting}
-                onClick={() => void runExport("png34", exportInput)}
-              >
-                匯出 PNG（3:4）
-              </Button>
-            </>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={exporting}
+              onClick={() => setExportOpen(true)}
+            >
+              {exporting ? "匯出中…" : "匯出"}
+            </Button>
           ) : null}
           <Button variant="outline" onClick={() => void load(electionId)}>
             重新整理
           </Button>
         </div>
       </div>
+
+      <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+        <DialogContent>
+          <DialogTitle>匯出結果</DialogTitle>
+          <DialogDescription className="mt-1">
+            請選擇要匯出的格式與尺寸。
+          </DialogDescription>
+          <div className="mt-4 space-y-4">
+            {(["PDF", "PNG"] as const).map((group) => (
+              <div key={group} className="space-y-2">
+                <div className="text-xs font-medium text-[var(--muted-foreground)]">
+                  {group}
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {EXPORT_OPTIONS.filter((item) => item.group === group).map(
+                    (item) => (
+                      <Button
+                        key={item.kind}
+                        type="button"
+                        variant="outline"
+                        disabled={exporting || !exportInput}
+                        onClick={() => {
+                          if (!exportInput) {
+                            return;
+                          }
+                          void runExport(item.kind, exportInput);
+                        }}
+                      >
+                        {item.label}
+                      </Button>
+                    ),
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>

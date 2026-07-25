@@ -20,12 +20,8 @@ import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { CandidateVisual } from "@/components/candidate-visual";
-import { ElectionProjectionView } from "@/components/election-projection-view";
 import { ProjectionFullscreenRoot } from "@/components/projection-fullscreen-root";
-import {
-  ResultsProjectionView,
-  type ResultsProjectionInput,
-} from "@/components/results-projection-view";
+import type { ResultsProjectionInput } from "@/components/results-projection-view";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -59,6 +55,23 @@ import {
   requiresEligibleList,
   votingModeLabel,
 } from "@/lib/voting-mode";
+import dynamic from "next/dynamic";
+
+const ElectionProjectionView = dynamic(
+  () =>
+    import("@/components/election-projection-view").then((m) => ({
+      default: m.ElectionProjectionView,
+    })),
+  { ssr: false },
+);
+
+const ResultsProjectionView = dynamic(
+  () =>
+    import("@/components/results-projection-view").then((m) => ({
+      default: m.ResultsProjectionView,
+    })),
+  { ssr: false },
+);
 
 const titleFormSchema = z
   .object({
@@ -418,6 +431,14 @@ export default function AdminPage() {
     });
   }
 
+  async function loadElectionBundle(electionId: string) {
+    await Promise.all([
+      loadElectionDetail(electionId),
+      loadVoters(electionId),
+      loadManagers(electionId),
+    ]);
+  }
+
   async function loadElections(preferId?: string | null) {
     const res = await fetch("/api/admin/elections");
     const data = await readResponseJson<{
@@ -438,15 +459,11 @@ export default function AdminPage() {
     setListPage(1);
     if (preferId && list.some((e) => e.electionId === preferId)) {
       setSelectedId(preferId);
-      await loadElectionDetail(preferId);
-      await loadVoters(preferId);
-      await loadManagers(preferId);
+      await loadElectionBundle(preferId);
       return;
     }
     if (selectedId && list.some((e) => e.electionId === selectedId)) {
-      await loadElectionDetail(selectedId);
-      await loadVoters(selectedId);
-      await loadManagers(selectedId);
+      await loadElectionBundle(selectedId);
       return;
     }
     setSelectedId(null);
@@ -693,9 +710,7 @@ export default function AdminPage() {
     setDetailTab("overview");
     setAudit(null);
     setSelectedDetail(null);
-    await loadElectionDetail(electionId);
-    await loadVoters(electionId);
-    await loadManagers(electionId);
+    await loadElectionBundle(electionId);
   }
 
   async function onAddManagers() {
