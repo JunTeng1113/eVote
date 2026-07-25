@@ -52,9 +52,23 @@ model Election {
   namedBallots NamedBallot[]
   guestBallots GuestBallot[]
   managers     ElectionManager[]
+  changeLogs   ElectionChangeLog[]
 
   @@index([createdAt])
   @@index([createdByEmail])
+}
+
+model ElectionChangeLog {
+  id         String   @id @default(cuid())
+  electionId String
+  actorEmail String
+  action     String
+  summary    String
+  detail     Json?
+  createdAt  DateTime @default(now())
+  election   Election @relation(fields: [electionId], references: [electionId], onDelete: Cascade)
+
+  @@index([electionId, createdAt])
 }
 
 model ElectionManager {

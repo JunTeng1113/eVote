@@ -6,6 +6,7 @@ import {
   listElectionManagers,
   removeElectionManager,
 } from "@/lib/store/election-store";
+import { appendElectionChangeLog } from "@/lib/store/election-change-log";
 
 const addManagersSchema = z.object({
   electionId: z.string().min(1),
@@ -60,6 +61,15 @@ export async function POST(request: Request) {
     parsed.data.electionId,
     parsed.data.emails,
   );
+  if (result.added.length > 0) {
+    await appendElectionChangeLog({
+      electionId: parsed.data.electionId,
+      actorEmail: access.email,
+      action: "add_managers",
+      summary: `新增 ${result.added.length} 位共同管理者`,
+      detail: { added: result.added, skipped: result.skipped },
+    });
+  }
   return NextResponse.json({ ok: true, ...result });
 }
 
@@ -87,6 +97,13 @@ export async function DELETE(request: Request) {
         { status: 404 },
       );
     }
+    await appendElectionChangeLog({
+      electionId: parsed.data.electionId,
+      actorEmail: access.email,
+      action: "remove_manager",
+      summary: `移除共同管理者 ${parsed.data.email}`,
+      detail: { email: parsed.data.email },
+    });
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "移除失敗";

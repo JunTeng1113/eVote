@@ -4,6 +4,7 @@ import {
   addEligibleEmails,
   removeEligibleEmail,
 } from "@/lib/store/election-store";
+import { appendElectionChangeLog } from "@/lib/store/election-change-log";
 import {
   adminEmailsSchema,
   removeEmailSchema,
@@ -51,6 +52,15 @@ export async function POST(request: Request) {
       parsed.data.electionId,
       parsed.data.emails,
     );
+    if (result.added.length > 0) {
+      await appendElectionChangeLog({
+        electionId: parsed.data.electionId,
+        actorEmail: access.email,
+        action: "add_voters",
+        summary: `新增 ${result.added.length} 位可投票人`,
+        detail: { added: result.added, skipped: result.skipped },
+      });
+    }
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     const message = error instanceof Error ? error.message : "新增失敗";
@@ -85,6 +95,13 @@ export async function DELETE(request: Request) {
         { status: 400 },
       );
     }
+    await appendElectionChangeLog({
+      electionId: parsed.data.electionId,
+      actorEmail: access.email,
+      action: "remove_voter",
+      summary: `移除可投票人 ${parsed.data.email}`,
+      detail: { email: parsed.data.email },
+    });
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "移除失敗";

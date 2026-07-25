@@ -147,7 +147,7 @@ const emailsFormSchema = z.object({
 
 type AdminSection = "create" | "edit" | "list";
 type CreateStep = 1 | 2 | 3;
-type DetailTab = "overview" | "audit" | "voters" | "managers";
+type DetailTab = "overview" | "audit" | "voters" | "managers" | "history";
 
 type DraftCandidate = {
   key: string;
@@ -200,6 +200,14 @@ type AuditResult = {
   passed: boolean;
   phase: string;
   checks: Array<{ name: string; passed: boolean; detail: string }>;
+};
+
+type ChangeLogRow = {
+  id: string;
+  actorEmail: string;
+  action: string;
+  summary: string;
+  createdAt: string;
 };
 
 function phaseText(phase: string): string {
@@ -350,6 +358,8 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [audit, setAudit] = useState<AuditResult | null>(null);
+  const [changeLogs, setChangeLogs] = useState<ChangeLogRow[]>([]);
+  const [changeLogsLoading, setChangeLogsLoading] = useState(false);
   const [draftCandidates, setDraftCandidates] = useState<DraftCandidate[]>([
     newDraftCandidate(),
     newDraftCandidate(),
@@ -470,6 +480,7 @@ export default function AdminPage() {
     setSelectedDetail(null);
     setVoters([]);
     setManagers([]);
+    setChangeLogs([]);
   }
 
   async function loadVoters(electionId: string) {
@@ -493,6 +504,23 @@ export default function AdminPage() {
     if (res.ok) {
       setManagers(data.managers ?? []);
     }
+  }
+
+  async function loadChangeLogs(electionId: string) {
+    setChangeLogsLoading(true);
+    const res = await fetch(
+      `/api/admin/changelog?electionId=${encodeURIComponent(electionId)}`,
+    );
+    const data = (await res.json()) as {
+      ok?: boolean;
+      logs?: ChangeLogRow[];
+    };
+    setChangeLogsLoading(false);
+    if (res.ok && data.ok) {
+      setChangeLogs(data.logs ?? []);
+      return;
+    }
+    setChangeLogs([]);
   }
 
   useEffect(() => {
@@ -709,6 +737,7 @@ export default function AdminPage() {
     setSelectedId(electionId);
     setDetailTab("overview");
     setAudit(null);
+    setChangeLogs([]);
     setSelectedDetail(null);
     await loadElectionBundle(electionId);
   }
@@ -1231,29 +1260,35 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-[family-name:var(--font-display)] text-3xl font-semibold text-[var(--primary)]">
-          投票管理
-        </h1>
-        <p className="mt-2 text-[var(--muted-foreground)]">
-          建立新投票採分階段填寫；也可查看你管理的投票並管理名單。
-          {isSystemAdmin ? "（系統管理者可查看全部投票）" : null}
-        </p>
-      </div>
-
       <div className="flex flex-wrap gap-2">
-        <Button
-          variant={section === "list" ? "default" : "outline"}
-          onClick={() => {
-            if (section === "edit") {
-              resetCreateWizard();
-            }
-            setSection("list");
-            void loadElections(selectedId);
-          }}
-        >
-          查看投票列表
-        </Button>
+        {section === "list" && selectedId ? (
+          <Button
+            variant="outline"
+            onClick={() => {
+              setProjectionOpen(false);
+              setSelectedId(null);
+              setSelectedDetail(null);
+              setVoters([]);
+              setAudit(null);
+              setChangeLogs([]);
+            }}
+          >
+            返回列表
+          </Button>
+        ) : (
+          <Button
+            variant={section === "list" ? "default" : "outline"}
+            onClick={() => {
+              if (section === "edit") {
+                resetCreateWizard();
+              }
+              setSection("list");
+              void loadElections(selectedId);
+            }}
+          >
+            查看投票列表
+          </Button>
+        )}
         <Button
           variant={section === "create" ? "default" : "outline"}
           onClick={() => {
@@ -1910,61 +1945,58 @@ export default function AdminPage() {
             </Card>
           ) : (
             <>
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button
-                  variant="outline"
+                  variant={detailTab === "overview" ? "default" : "outline"}
+                  onClick={() => setDetailTab("overview")}
+                >
+                  說明與選項
+                </Button>
+                <Button
+                  variant={detailTab === "audit" ? "default" : "outline"}
                   onClick={() => {
-                    setProjectionOpen(false);
-                    setSelectedId(null);
-                    setSelectedDetail(null);
-                    setVoters([]);
-                    setAudit(null);
+                    setDetailTab("audit");
+                    void runAudit();
                   }}
                 >
-                  返回列表
+                  檢查資料
                 </Button>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant={detailTab === "overview" ? "default" : "outline"}
-                    onClick={() => setDetailTab("overview")}
-                  >
-                    說明與選項
-                  </Button>
-                  <Button
-                    variant={detailTab === "audit" ? "default" : "outline"}
-                    onClick={() => {
-                      setDetailTab("audit");
-                      void runAudit();
-                    }}
-                  >
-                    檢查資料
-                  </Button>
-                  <Button
-                    variant={detailTab === "voters" ? "default" : "outline"}
-                    onClick={() => setDetailTab("voters")}
-                    disabled={!requiresEligibleList(selected.votingMode)}
-                    title={
-                      !requiresEligibleList(selected.votingMode)
-                        ? isGuestOpenMode(selected.votingMode)
-                          ? "無須登入投票不使用可投票名單"
-                          : "記名開放不使用可投票名單"
-                        : undefined
+                <Button
+                  variant={detailTab === "voters" ? "default" : "outline"}
+                  onClick={() => setDetailTab("voters")}
+                  disabled={!requiresEligibleList(selected.votingMode)}
+                  title={
+                    !requiresEligibleList(selected.votingMode)
+                      ? isGuestOpenMode(selected.votingMode)
+                        ? "無須登入投票不使用可投票名單"
+                        : "記名開放不使用可投票名單"
+                      : undefined
+                  }
+                >
+                  可投票名單
+                </Button>
+                <Button
+                  variant={detailTab === "managers" ? "default" : "outline"}
+                  onClick={() => {
+                    setDetailTab("managers");
+                    if (selectedId) {
+                      void loadManagers(selectedId);
                     }
-                  >
-                    可投票名單
-                  </Button>
-                  <Button
-                    variant={detailTab === "managers" ? "default" : "outline"}
-                    onClick={() => {
-                      setDetailTab("managers");
-                      if (selectedId) {
-                        void loadManagers(selectedId);
-                      }
-                    }}
-                  >
-                    共同管理者
-                  </Button>
-                </div>
+                  }}
+                >
+                  共同管理者
+                </Button>
+                <Button
+                  variant={detailTab === "history" ? "default" : "outline"}
+                  onClick={() => {
+                    setDetailTab("history");
+                    if (selectedId) {
+                      void loadChangeLogs(selectedId);
+                    }
+                  }}
+                >
+                  異動紀錄
+                </Button>
               </div>
 
               {detailTab === "overview" ? (
@@ -2327,6 +2359,54 @@ export default function AdminPage() {
                         ))
                       )}
                     </div>
+                  </CardContent>
+                </Card>
+              ) : null}
+
+              {detailTab === "history" ? (
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-2">
+                    <div>
+                      <CardTitle>異動紀錄</CardTitle>
+                      <CardDescription>
+                        顯示管理者對「{selected.title}」的設定與管理操作（不含選票內容）。
+                      </CardDescription>
+                    </div>
+                    <Button
+                      variant="outline"
+                      disabled={changeLogsLoading || !selectedId}
+                      onClick={() => {
+                        if (selectedId) {
+                          void loadChangeLogs(selectedId);
+                        }
+                      }}
+                    >
+                      重新整理
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {changeLogsLoading ? (
+                      <p className="text-sm text-[var(--muted-foreground)]">
+                        載入中…
+                      </p>
+                    ) : changeLogs.length === 0 ? (
+                      <p className="text-sm text-[var(--muted-foreground)]">
+                        尚無異動紀錄（此功能上線後的操作才會留下紀錄）。
+                      </p>
+                    ) : (
+                      changeLogs.map((log) => (
+                        <div
+                          key={log.id}
+                          className="rounded-lg border border-[var(--border)] px-3 py-2 text-sm"
+                        >
+                          <div className="font-medium">{log.summary}</div>
+                          <div className="mt-1 text-xs text-[var(--muted-foreground)]">
+                            {new Date(log.createdAt).toLocaleString("zh-TW")} ·{" "}
+                            {log.actorEmail}
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </CardContent>
                 </Card>
               ) : null}

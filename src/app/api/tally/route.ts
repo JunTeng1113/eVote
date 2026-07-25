@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireElectionManager } from "@/lib/auth/session";
 import { closeVoting, reopenVoting, runTally } from "@/lib/services/tally-service";
+import { appendElectionChangeLog } from "@/lib/store/election-change-log";
 import { buildPublicElectionView } from "@/lib/election-view";
 import {
   getElection,
@@ -74,14 +75,39 @@ export async function POST(request: Request) {
   try {
     if (body.action === "close") {
       const result = await closeVoting(body.electionId);
+      if (result.ok) {
+        await appendElectionChangeLog({
+          electionId: body.electionId,
+          actorEmail: access.email,
+          action: "close",
+          summary: "截止投票",
+          detail: { ballotCount: result.ballotCount },
+        });
+      }
       return NextResponse.json(result, { status: result.ok ? 200 : 400 });
     }
     if (body.action === "reopen") {
       const result = await reopenVoting(body.electionId);
+      if (result.ok) {
+        await appendElectionChangeLog({
+          electionId: body.electionId,
+          actorEmail: access.email,
+          action: "reopen",
+          summary: "恢復投票",
+        });
+      }
       return NextResponse.json(result, { status: result.ok ? 200 : 400 });
     }
     if (body.action === "tally") {
       const result = await runTally(body.electionId);
+      if (result.ok) {
+        await appendElectionChangeLog({
+          electionId: body.electionId,
+          actorEmail: access.email,
+          action: "tally",
+          summary: "執行開票",
+        });
+      }
       return NextResponse.json(result, { status: result.ok ? 200 : 400 });
     }
     return NextResponse.json({ ok: false, error: "未知操作" }, { status: 400 });

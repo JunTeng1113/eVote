@@ -65,15 +65,6 @@ export default function ConfirmPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-[family-name:var(--font-display)] text-3xl font-semibold text-[var(--primary)]">
-          確認投票
-        </h1>
-        <p className="mt-2 text-[var(--muted-foreground)]">
-          貼上投票完成後取得的確認碼，即可確認系統有收到你的票。
-        </p>
-      </div>
-
       <Card>
         <CardHeader>
           <CardTitle>查詢確認碼</CardTitle>

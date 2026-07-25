@@ -14,6 +14,7 @@ import {
   updateCandidateImage,
   updateElectionMeta,
 } from "@/lib/store/election-store";
+import { appendElectionChangeLog } from "@/lib/store/election-change-log";
 import { buildPublicElectionView } from "@/lib/election-view";
 import {
   formatElectionScheduleLabel,
@@ -127,6 +128,18 @@ export async function POST(request: Request) {
       voterEmails: parseVoterEmails(parsed.data.voterEmails),
     });
 
+    await appendElectionChangeLog({
+      electionId: election.electionId,
+      actorEmail: user.email,
+      action: "create",
+      summary: `建立投票「${election.title}」`,
+      detail: {
+        votingMode: election.votingMode,
+        candidateCount: election.candidates.length,
+        voterCount: election.voters.length,
+      },
+    });
+
     return NextResponse.json({
       ok: true,
       election: buildPublicElectionView(election),
@@ -152,6 +165,18 @@ export async function PATCH(request: Request) {
         imagePatch.data.candidateId,
         imagePatch.data.imageUrl,
       );
+      const candidate = election.candidates.find(
+        (item) => item.id === imagePatch.data.candidateId,
+      );
+      await appendElectionChangeLog({
+        electionId: election.electionId,
+        actorEmail: access.email,
+        action: "update_image",
+        summary: candidate
+          ? `更新候選人「${candidate.name}」的圖片`
+          : "更新候選人圖片",
+        detail: { candidateId: imagePatch.data.candidateId },
+      });
       return NextResponse.json({
         ok: true,
         election: publicElectionView(election),
@@ -178,6 +203,17 @@ export async function PATCH(request: Request) {
         votingEndsAt: reviseParsed.data.votingEndsAt,
         durationMinutes: reviseParsed.data.durationMinutes,
         candidates: reviseParsed.data.candidates,
+      });
+      await appendElectionChangeLog({
+        electionId: election.electionId,
+        actorEmail: access.email,
+        action: "revise",
+        summary: `修訂投票設定「${election.title}」`,
+        detail: {
+          votingMode: election.votingMode,
+          scheduleMode: election.scheduleMode,
+          candidateCount: election.candidates.length,
+        },
       });
       return NextResponse.json({
         ok: true,
@@ -207,6 +243,13 @@ export async function PATCH(request: Request) {
       title: parsed.data.title,
       description: parsed.data.description,
       candidates: parsed.data.candidates,
+    });
+    await appendElectionChangeLog({
+      electionId: election.electionId,
+      actorEmail: access.email,
+      action: "update_meta",
+      summary: `更新標題／說明／選項「${election.title}」`,
+      detail: { candidateCount: election.candidates.length },
     });
     return NextResponse.json({ ok: true, election: publicElectionView(election) });
   } catch (error) {
@@ -250,10 +293,17 @@ export async function PUT(request: Request) {
     return NextResponse.json(access, { status: 403 });
   }
   try {
-    const election = await resetElection(
-      body.electionId,
-      body.keepVoters !== false,
-    );
+    const keepVoters = body.keepVoters !== false;
+    const election = await resetElection(body.electionId, keepVoters);
+    await appendElectionChangeLog({
+      electionId: election.electionId,
+      actorEmail: access.email,
+      action: "reset",
+      summary: keepVoters
+        ? "重設投票（保留可投票名單）"
+        : "重設投票（清空可投票名單）",
+      detail: { keepVoters },
+    });
     return NextResponse.json({ ok: true, election: publicElectionView(election) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "重設失敗";
