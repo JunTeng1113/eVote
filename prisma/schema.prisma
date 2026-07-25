@@ -164,3 +164,10 @@ model GuestBallot {
   @@unique([electionId, ipHash])
   @@index([electionId])
 }
+
+/** 站內在線裝置心跳；同一 deviceId（跨分頁共用）只算一人。 */
+model OnlinePresence {
+  deviceId   String   @id
+  lastSeenAt DateTime
+  @@index([lastSeenAt])
+}

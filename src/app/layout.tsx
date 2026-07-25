@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Manrope, Sora } from "next/font/google";
 import { SiteHeader } from "@/components/site-header";
 import { SiteBreadcrumb } from "@/components/site-breadcrumb";
+import { SiteFooter } from "@/components/site-footer";
 import { AuthSessionProvider } from "@/components/auth-session-provider";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
@@ -37,9 +38,7 @@ export default function RootLayout({
             <SiteBreadcrumb />
             {children}
           </main>
-          <footer className="border-t border-[var(--border)]/70 py-6 text-center text-xs text-[var(--muted-foreground)]">
-            eVote · 線上投票
-          </footer>
+          <SiteFooter />
           <Toaster />
         </AuthSessionProvider>
       </body>
